@@ -2,7 +2,7 @@
 // "Coin" resource has fixed supply, so this is like NFTs
 // that is reusable, and is tradable.
 // "Design" resource does not have supply limitation, so
-// this is like simply buy-able chat-stamps or game-items.
+// this is like simply fixed-price chat-stamps or game-items.
 
 module garage_token::coins {
     use std::signer;
@@ -36,12 +36,15 @@ module garage_token::coins {
         id: ObjectId
     }
 
-    struct DesignObjectId has store, copy, drop {
-        id: ObjectId
-    }
-
+    #[resource_group_member(
+        group = object::ObjectGroup
+    )]
     struct Design has key {
         attribute: String
+    }
+
+    struct DesignObjectId has store, copy, drop {
+        id: ObjectId
     }
 
     public fun exists_coin(coin: &CoinObjectId): bool {

@@ -1,10 +1,9 @@
 [package]
-name = 'garage-token'
+name = 'TokenObjects'
 version = '1.0.0'
 
 [addresses]
-garage_token = "0xcafe"
+token_objects = "0x4"
 
 [dependencies]
 AptosFramework = { local = "../../../aptos-core/aptos-move/framework/aptos-framework" }
-TokenObjects = { local = "../framework" }

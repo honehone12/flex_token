@@ -1,5 +1,5 @@
 [package]
-name = 'garage-token'
+name = 'garage_token'
 version = '1.0.0'
 
 [addresses]
