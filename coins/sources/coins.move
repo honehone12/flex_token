@@ -1,8 +1,9 @@
 // simple idea with move object model.
-// "Coin" resource has fixed supply, so this is like NFTs
+// "Coin" resource has fixed supply, so this is like NFT
 // that is reusable, and is tradable.
+// means "Coin" is not fungible token, but looks-like-coin NFT.
 // "Design" resource does not have supply limitation, so
-// this is like simply fixed-price chat-stamps or game-items.
+// this can be sold with fixed-price.
 
 module garage_token::coins {
     use std::signer;
@@ -212,7 +213,7 @@ module garage_token::coins {
             object::is_owner(coin.id, owner_addr),
             error::permission_denied(E_NOT_OWNER)
         );
-        
+
         let coin_obj_addr = object::object_id_address(&coin.id);
         let coin_obj = borrow_global_mut<Coin>(coin_obj_addr);
         let stored_design = option::extract(&mut coin_obj.design);
