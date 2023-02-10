@@ -555,7 +555,7 @@ module garage_token::portrait {
         assert!(object::is_owner(parts.id, base_obj_addr), 2);
 
         take_off_hair(account, base, parts);
-        assert!(object::is_owner(parts.id, addr), 2);
+        assert!(object::is_owner(parts.id, addr), 3);
     }
 
     #[test(account = @123)]
@@ -585,7 +585,7 @@ module garage_token::portrait {
         assert!(object::is_owner(parts.id, base_obj_addr), 2);
 
         take_off_face(account, base, parts);
-        assert!(object::is_owner(parts.id, addr), 2);
+        assert!(object::is_owner(parts.id, addr), 3);
     }
 
     #[test(account = @123)]
@@ -615,7 +615,7 @@ module garage_token::portrait {
         assert!(object::is_owner(parts.id, base_obj_addr), 2);
 
         take_off_ear(account, base, parts);
-        assert!(object::is_owner(parts.id, addr), 2);
+        assert!(object::is_owner(parts.id, addr), 3);
     }
 
     #[test(account = @123)]
@@ -645,7 +645,7 @@ module garage_token::portrait {
         assert!(object::is_owner(parts.id, base_obj_addr), 2);
 
         take_off_ear(account, base, parts);
-        assert!(object::is_owner(parts.id, addr), 2);
+        assert!(object::is_owner(parts.id, addr), 3);
     }
 
     #[test(account = @123)]
@@ -675,7 +675,7 @@ module garage_token::portrait {
         assert!(object::is_owner(parts.id, base_obj_addr), 2);
 
         take_off_eyes(account, base, parts);
-        assert!(object::is_owner(parts.id, addr), 2);
+        assert!(object::is_owner(parts.id, addr), 3);
     }
 
     #[test(account = @123)]
@@ -705,6 +705,6 @@ module garage_token::portrait {
         assert!(object::is_owner(parts.id, base_obj_addr), 2);
 
         take_off_mouth(account, base, parts);
-        assert!(object::is_owner(parts.id, addr), 2);
+        assert!(object::is_owner(parts.id, addr), 3);
     }
 }
