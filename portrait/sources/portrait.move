@@ -527,4 +527,184 @@ module garage_token::portrait {
             owner_addr
         );
     }
+
+    #[test(account = @123)]
+    fun test_put_on_take_off_hair(account: &signer)
+    acquires PortraitOnChainConfig, PortraitBase {
+        init_module(account);
+        let addr = signer::address_of(account);
+
+        let base = crate_portrait_base(
+            account,
+            utf8(b"user-customizable-token-00"),
+            utf8(b"portrait-00"),
+            utf8(b"portrait-00-url")
+        );
+        assert!(object::is_owner(base.id, addr), 0);
+        let base_obj_addr = object::object_id_address(&base.id);
+
+        let parts = create<Hair>(
+            account,
+            utf8(b"token-parts-00"),
+            utf8(b"parts-00"),
+            utf8(b"hair"),
+            utf8(b"parts-00-url")
+        );
+        assert!(object::is_owner(parts.id, addr), 1);
+        put_on_hair(account, base, parts);
+        assert!(object::is_owner(parts.id, base_obj_addr), 2);
+
+        take_off_hair(account, base, parts);
+        assert!(object::is_owner(parts.id, addr), 2);
+    }
+
+    #[test(account = @123)]
+    fun test_put_on_take_off_face(account: &signer)
+    acquires PortraitOnChainConfig, PortraitBase {
+        init_module(account);
+        let addr = signer::address_of(account);
+
+        let base = crate_portrait_base(
+            account,
+            utf8(b"user-customizable-token-00"),
+            utf8(b"portrait-00"),
+            utf8(b"portrait-00-url")
+        );
+        assert!(object::is_owner(base.id, addr), 0);
+        let base_obj_addr = object::object_id_address(&base.id);
+
+        let parts = create<Face>(
+            account,
+            utf8(b"token-parts-00"),
+            utf8(b"parts-00"),
+            utf8(b"face"),
+            utf8(b"parts-00-url")
+        );
+        assert!(object::is_owner(parts.id, addr), 1);
+        put_on_face(account, base, parts);
+        assert!(object::is_owner(parts.id, base_obj_addr), 2);
+
+        take_off_face(account, base, parts);
+        assert!(object::is_owner(parts.id, addr), 2);
+    }
+
+    #[test(account = @123)]
+    fun test_put_on_take_off_ear(account: &signer)
+    acquires PortraitOnChainConfig, PortraitBase {
+        init_module(account);
+        let addr = signer::address_of(account);
+
+        let base = crate_portrait_base(
+            account,
+            utf8(b"user-customizable-token-00"),
+            utf8(b"portrait-00"),
+            utf8(b"portrait-00-url")
+        );
+        assert!(object::is_owner(base.id, addr), 0);
+        let base_obj_addr = object::object_id_address(&base.id);
+
+        let parts = create<Ear>(
+            account,
+            utf8(b"token-parts-00"),
+            utf8(b"parts-00"),
+            utf8(b"ear"),
+            utf8(b"parts-00-url")
+        );
+        assert!(object::is_owner(parts.id, addr), 1);
+        put_on_ear(account, base, parts);
+        assert!(object::is_owner(parts.id, base_obj_addr), 2);
+
+        take_off_ear(account, base, parts);
+        assert!(object::is_owner(parts.id, addr), 2);
+    }
+
+    #[test(account = @123)]
+    fun test_put_on_take_off_nose(account: &signer)
+    acquires PortraitOnChainConfig, PortraitBase {
+        init_module(account);
+        let addr = signer::address_of(account);
+
+        let base = crate_portrait_base(
+            account,
+            utf8(b"user-customizable-token-00"),
+            utf8(b"portrait-00"),
+            utf8(b"portrait-00-url")
+        );
+        assert!(object::is_owner(base.id, addr), 0);
+        let base_obj_addr = object::object_id_address(&base.id);
+
+        let parts = create<Ear>(
+            account,
+            utf8(b"token-parts-00"),
+            utf8(b"parts-00"),
+            utf8(b"nose"),
+            utf8(b"parts-00-url")
+        );
+        assert!(object::is_owner(parts.id, addr), 1);
+        put_on_ear(account, base, parts);
+        assert!(object::is_owner(parts.id, base_obj_addr), 2);
+
+        take_off_ear(account, base, parts);
+        assert!(object::is_owner(parts.id, addr), 2);
+    }
+
+    #[test(account = @123)]
+    fun test_put_on_take_off_eyes(account: &signer)
+    acquires PortraitOnChainConfig, PortraitBase {
+        init_module(account);
+        let addr = signer::address_of(account);
+
+        let base = crate_portrait_base(
+            account,
+            utf8(b"user-customizable-token-00"),
+            utf8(b"portrait-00"),
+            utf8(b"portrait-00-url")
+        );
+        assert!(object::is_owner(base.id, addr), 0);
+        let base_obj_addr = object::object_id_address(&base.id);
+
+        let parts = create<Eyes>(
+            account,
+            utf8(b"token-parts-00"),
+            utf8(b"parts-00"),
+            utf8(b"eyes"),
+            utf8(b"parts-00-url")
+        );
+        assert!(object::is_owner(parts.id, addr), 1);
+        put_on_eyes(account, base, parts);
+        assert!(object::is_owner(parts.id, base_obj_addr), 2);
+
+        take_off_eyes(account, base, parts);
+        assert!(object::is_owner(parts.id, addr), 2);
+    }
+
+    #[test(account = @123)]
+    fun test_put_on_take_off_mouth(account: &signer)
+    acquires PortraitOnChainConfig, PortraitBase {
+        init_module(account);
+        let addr = signer::address_of(account);
+
+        let base = crate_portrait_base(
+            account,
+            utf8(b"user-customizable-token-00"),
+            utf8(b"portrait-00"),
+            utf8(b"portrait-00-url")
+        );
+        assert!(object::is_owner(base.id, addr), 0);
+        let base_obj_addr = object::object_id_address(&base.id);
+
+        let parts = create<Mouth>(
+            account,
+            utf8(b"token-parts-00"),
+            utf8(b"parts-00"),
+            utf8(b"mouth"),
+            utf8(b"parts-00-url")
+        );
+        assert!(object::is_owner(parts.id, addr), 1);
+        put_on_mouth(account, base, parts);
+        assert!(object::is_owner(parts.id, base_obj_addr), 2);
+
+        take_off_mouth(account, base, parts);
+        assert!(object::is_owner(parts.id, addr), 2);
+    }
 }
