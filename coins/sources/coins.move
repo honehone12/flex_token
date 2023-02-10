@@ -70,7 +70,7 @@ module garage_token::coins {
             collection::create_mutability_config(false, false),
             coin_collection_name,
             option::none(),
-            utf8(b"collection-uri")
+            utf8(b"coin-collection-url")
         );
         _ = collection::create_aggregable_collection(
             caller,
@@ -78,19 +78,21 @@ module garage_token::coins {
             collection::create_mutability_config(false, false),
             design_collection_name,
             option::none(),
-            utf8(b"collection-uri")
+            utf8(b"design-collection-url")
         );
-        let on_chain_config = CoinsOnChainConfig {
-            coin_collection_name,
-            coin_mutability_config: token::create_mutability_config(
-                false, false, false
-            ),
-            design_collection_name,
-            design_mutability_config: token::create_mutability_config(
-                false, false, false
-            )
-        };
-        move_to(caller, on_chain_config);
+        move_to(
+            caller, 
+            CoinsOnChainConfig {
+                coin_collection_name,
+                coin_mutability_config: token::create_mutability_config(
+                    false, false, false
+                ),
+                design_collection_name,
+                design_mutability_config: token::create_mutability_config(
+                    false, false, false
+                )
+            }
+        );
     }
 
     fun create_coin(
@@ -113,10 +115,12 @@ module garage_token::coins {
             uri
         );
         let token_signer = object::generate_signer(&creator_ref);
-        let coin = Coin{
-            design: option::none()
-        };
-        move_to(&token_signer, coin);
+        move_to(
+            &token_signer, 
+            Coin{
+                design: option::none()
+            }
+        );
         CoinObjectId{
             id: object::address_to_object_id(
                 signer::address_of(&token_signer)
@@ -145,10 +149,12 @@ module garage_token::coins {
             uri
         );
         let token_signer = object::generate_signer(&creator_ref);
-        let design = Design{
-            attribute
-        };
-        move_to(&token_signer, design);
+        move_to(
+            &token_signer,
+            Design{
+                attribute
+            }
+        );
         DesignObjectId{
             id: object::address_to_object_id(
                signer::address_of(&token_signer)
@@ -201,13 +207,14 @@ module garage_token::coins {
             exists_coin(&coin),
             error::not_found(E_NO_SUCH_COINS)
         );
-        let coin_obj_addr = object::object_id_address(&coin.id);
-        let coin_obj = borrow_global_mut<Coin>(coin_obj_addr);
+        let owner_addr = signer::address_of(owner);
         assert!(
-            object::is_owner(coin.id, signer::address_of(owner)),
+            object::is_owner(coin.id, owner_addr),
             error::permission_denied(E_NOT_OWNER)
         );
-
+        
+        let coin_obj_addr = object::object_id_address(&coin.id);
+        let coin_obj = borrow_global_mut<Coin>(coin_obj_addr);
         let stored_design = option::extract(&mut coin_obj.design);
         assert!(
             stored_design == design,
@@ -220,7 +227,7 @@ module garage_token::coins {
         object::transfer(
             owner,
             design.id,
-            signer::address_of(owner)
+            owner_addr
         );
     }
 
