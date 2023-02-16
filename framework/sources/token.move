@@ -30,7 +30,7 @@ module token_objects::token {
     /// Attempted to mutate an immutable field
     const EFIELD_NOT_MUTABLE: u64 = 2;
 
-    use aptos_framework::object::{Self, CreatorRef, ObjectId};
+    use aptos_framework::object::{Self, ConstructorRef, Object};
 
     use token_objects::collection::{Self, Royalty};
 
@@ -71,9 +71,9 @@ module token_objects::token {
         name: String,
         royalty: Option<Royalty>,
         uri: String,
-    ): CreatorRef {
+    ): ConstructorRef {
         let creator_address = signer::address_of(creator);
-        let seed = create_token_id_seed(&collection, &name);
+        let seed = create_token_seed(&collection, &name);
         let creator_ref = object::create_named_object(creator, seed);
         let object_signer = object::generate_signer(&creator_ref);
 
@@ -99,11 +99,11 @@ module token_objects::token {
         MutabilityConfig { description, name, uri }
     }
 
-    public fun create_token_id(creator: &address, collection: &String, name: &String): ObjectId {
-        object::create_object_id(creator, create_token_id_seed(collection, name))
+    public fun create_token_address(creator: &address, collection: &String, name: &String): address {
+        object::create_object_address(creator, create_token_seed(collection, name))
     }
 
-    public fun create_token_id_seed(collection: &String, name: &String): vector<u8> {
+    public fun create_token_seed(collection: &String, name: &String): vector<u8> {
         let seed = *string::bytes(collection);
         vector::append(&mut seed, b"::");
         vector::append(&mut seed, *string::bytes(name));
@@ -153,33 +153,28 @@ module token_objects::token {
     }
 
     // Accessors
-
-    public fun is_collection(token_id: ObjectId): bool {
-        exists<Token>(object::object_id_address(&token_id))
-    }
-
-    public fun creator(token_id: ObjectId): address acquires Token {
+    inline fun verify<T: key>(token: &Object<T>): address {
+        let token_address = object::object_address(token);
         assert!(
-            exists<Token>(object::object_id_address(&token_id)),
+            exists<Token>(token_address),
             error::not_found(ETOKEN_DOES_NOT_EXIST),
         );
-        borrow_global<Token>(object::object_id_address(&token_id)).creator
+        token_address
     }
 
-    public fun collection(token_id: ObjectId): String acquires Token {
-        assert!(
-            exists<Token>(object::object_id_address(&token_id)),
-            error::not_found(ETOKEN_DOES_NOT_EXIST),
-        );
-        borrow_global<Token>(object::object_id_address(&token_id)).collection
+    public fun creator<T: key>(token: Object<T>): address acquires Token {
+        let token_address = verify(&token);
+        borrow_global<Token>(token_address).creator
     }
 
-    public fun creation_name(token_id: ObjectId): String acquires Token {
-        assert!(
-            exists<Token>(object::object_id_address(&token_id)),
-            error::not_found(ETOKEN_DOES_NOT_EXIST),
-        );
-        let token = borrow_global<Token>(object::object_id_address(&token_id));
+    public fun collection<T: key>(token: Object<T>): String acquires Token {
+        let token_address = verify(&token);
+        borrow_global<Token>(token_address).collection
+    }
+
+    public fun creation_name<T: key>(token: Object<T>): String acquires Token {
+        let token_address = verify(&token);
+        let token = borrow_global<Token>(token_address);
         if (option::is_some(&token.creation_name)) {
             *option::borrow(&token.creation_name)
         } else {
@@ -187,66 +182,45 @@ module token_objects::token {
         }
     }
 
-    public fun description(token_id: ObjectId): String acquires Token {
-        assert!(
-            exists<Token>(object::object_id_address(&token_id)),
-            error::not_found(ETOKEN_DOES_NOT_EXIST),
-        );
-        borrow_global<Token>(object::object_id_address(&token_id)).description
+    public fun description<T: key>(token: Object<T>): String acquires Token {
+        let token_address = verify(&token);
+        borrow_global<Token>(token_address).description
     }
 
-    public fun is_description_mutable(token_id: ObjectId): bool acquires Token {
-        assert!(
-            exists<Token>(object::object_id_address(&token_id)),
-            error::not_found(ETOKEN_DOES_NOT_EXIST),
-        );
-        borrow_global<Token>(object::object_id_address(&token_id)).mutability_config.description
+    public fun is_description_mutable<T: key>(token: Object<T>): bool acquires Token {
+        let token_address = verify(&token);
+        borrow_global<Token>(token_address).mutability_config.description
     }
 
-    public fun is_name_mutable(token_id: ObjectId): bool acquires Token {
-        assert!(
-            exists<Token>(object::object_id_address(&token_id)),
-            error::not_found(ETOKEN_DOES_NOT_EXIST),
-        );
-        borrow_global<Token>(object::object_id_address(&token_id)).mutability_config.name
+    public fun is_name_mutable<T: key>(token: Object<T>): bool acquires Token {
+        let token_address = verify(&token);
+        borrow_global<Token>(token_address).mutability_config.name
     }
 
-    public fun is_uri_mutable(token_id: ObjectId): bool acquires Token {
-        assert!(
-            exists<Token>(object::object_id_address(&token_id)),
-            error::not_found(ETOKEN_DOES_NOT_EXIST),
-        );
-        borrow_global<Token>(object::object_id_address(&token_id)).mutability_config.uri
+    public fun is_uri_mutable<T: key>(token: Object<T>): bool acquires Token {
+        let token_address = verify(&token);
+        borrow_global<Token>(token_address).mutability_config.uri
     }
 
-    public fun name(token_id: ObjectId): String acquires Token {
-        assert!(
-            exists<Token>(object::object_id_address(&token_id)),
-            error::not_found(ETOKEN_DOES_NOT_EXIST),
-        );
-        borrow_global<Token>(object::object_id_address(&token_id)).name
+    public fun name<T: key>(token: Object<T>): String acquires Token {
+        let token_address = verify(&token);
+        borrow_global<Token>(token_address).name
     }
 
-    public fun uri(token_id: ObjectId): String acquires Token {
-        assert!(
-            exists<Token>(object::object_id_address(&token_id)),
-            error::not_found(ETOKEN_DOES_NOT_EXIST),
-        );
-        borrow_global<Token>(object::object_id_address(&token_id)).uri
+    public fun uri<T: key>(token: Object<T>): String acquires Token {
+        let token_address = verify(&token);
+        borrow_global<Token>(token_address).uri
     }
 
     // Mutators
 
-    public fun set_description(
+    public fun set_description<T: key>(
         creator: &signer,
-        token_id: ObjectId,
+        token: Object<T>,
         description: String,
     ) acquires Token {
-        assert!(
-            exists<Token>(object::object_id_address(&token_id)),
-            error::not_found(ETOKEN_DOES_NOT_EXIST),
-        );
-        let token = borrow_global_mut<Token>(object::object_id_address(&token_id));
+        let token_address = verify(&token);
+        let token = borrow_global_mut<Token>(token_address);
         assert!(
             token.creator == signer::address_of(creator),
             error::permission_denied(ENOT_CREATOR),
@@ -258,16 +232,13 @@ module token_objects::token {
         token.description = description;
     }
 
-    public fun set_name(
+    public fun set_name<T: key>(
         creator: &signer,
-        token_id: ObjectId,
+        token: Object<T>,
         name: String,
     ) acquires Token {
-        assert!(
-            exists<Token>(object::object_id_address(&token_id)),
-            error::not_found(ETOKEN_DOES_NOT_EXIST),
-        );
-        let token = borrow_global_mut<Token>(object::object_id_address(&token_id));
+        let token_address = verify(&token);
+        let token = borrow_global_mut<Token>(token_address);
         assert!(
             token.creator == signer::address_of(creator),
             error::permission_denied(ENOT_CREATOR),
@@ -283,16 +254,13 @@ module token_objects::token {
         token.name = name;
     }
 
-    public fun set_uri(
+    public fun set_uri<T: key>(
         creator: &signer,
-        token_id: ObjectId,
+        token: Object<T>,
         uri: String,
     ) acquires Token {
-        assert!(
-            exists<Token>(object::object_id_address(&token_id)),
-            error::not_found(ETOKEN_DOES_NOT_EXIST),
-        );
-        let token = borrow_global_mut<Token>(object::object_id_address(&token_id));
+        let token_address = verify(&token);
+        let token = borrow_global_mut<Token>(token_address);
         assert!(
             token.creator == signer::address_of(creator),
             error::permission_denied(ENOT_CREATOR),
@@ -312,8 +280,9 @@ module token_objects::token {
         name: String,
         description: String
     )  acquires Token {
-        let token_id = create_token_id(&signer::address_of(creator), &collection, &name);
-        set_description(creator, token_id, description);
+        let token_addr = create_token_address(&signer::address_of(creator), &collection, &name);
+        let token = object::address_to_object<Token>(token_addr);
+        set_description(creator, token, description);
     }
 
     #[test(creator = @0x123, trader = @0x456)]
@@ -325,10 +294,11 @@ module token_objects::token {
         create_token_helper(creator, *&collection_name, *&token_name);
 
         let creator_address = signer::address_of(creator);
-        let token_id = create_token_id(&creator_address, &collection_name, &token_name);
-        assert!(object::owner(token_id) == creator_address, 1);
-        object::transfer(creator, token_id, signer::address_of(trader));
-        assert!(object::owner(token_id) == signer::address_of(trader), 1);
+        let token_addr = create_token_address(&creator_address, &collection_name, &token_name);
+        let token = object::address_to_object<Token>(token_addr);
+        assert!(object::owner(token) == creator_address, 1);
+        object::transfer(creator, token, signer::address_of(trader));
+        assert!(object::owner(token) == signer::address_of(trader), 1);
     }
 
     #[test(creator = @0x123)]

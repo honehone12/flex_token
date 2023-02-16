@@ -1,3 +1,7 @@
+// one interesting thing should be in mind.
+// object can be transfered through any contracts.
+// this behavior is different from classic smart contracts.
+
 // simple idea with move object model.
 // "Coin" resource has fixed supply, so this is like NFT
 // that is reusable, and is tradable.
@@ -10,7 +14,7 @@ module garage_token::coins {
     use std::error;
     use std::option::{Self, Option};
     use std::string::{String, utf8};
-    use aptos_framework::object::{Self, ObjectId};
+    use aptos_framework::object::{Self, Object};
     use token_objects::collection;
     use token_objects::token::{Self, MutabilityConfig};
 
@@ -30,11 +34,7 @@ module garage_token::coins {
         group = object::ObjectGroup
     )]
     struct Coin has key {
-        design: Option<DesignObjectId> 
-    }
-
-    struct CoinObjectId has copy, drop {
-        id: ObjectId
+        design: Option<Object<Design>> 
     }
 
     #[resource_group_member(
@@ -42,18 +42,6 @@ module garage_token::coins {
     )]
     struct Design has key {
         attribute: String
-    }
-
-    struct DesignObjectId has store, copy, drop {
-        id: ObjectId
-    }
-
-    public fun exists_coin(coin: &CoinObjectId): bool {
-        exists<Coin>(object::object_id_address(&coin.id))
-    }
-
-    public fun exists_design(design: &DesignObjectId): bool {
-        exists<Design>(object::object_id_address(&design.id))
     }
 
     fun init_module(caller: &signer) {
@@ -101,7 +89,7 @@ module garage_token::coins {
         description: String,
         name: String,
         uri: String
-    ): CoinObjectId
+    ): Object<Coin>
     acquires CoinsOnChainConfig {
         let on_chain_config = borrow_global<CoinsOnChainConfig>(
             signer::address_of(creator)
@@ -122,11 +110,7 @@ module garage_token::coins {
                 design: option::none()
             }
         );
-        CoinObjectId{
-            id: object::address_to_object_id(
-                signer::address_of(&token_signer)
-            )
-        }
+        object::address_to_object(signer::address_of(&token_signer))
     }
 
     fun create_design(
@@ -135,7 +119,7 @@ module garage_token::coins {
         name: String,
         attribute: String,
         uri: String,
-    ): DesignObjectId
+    ): Object<Design>
     acquires CoinsOnChainConfig {
         let on_chain_config = borrow_global<CoinsOnChainConfig>(
             signer::address_of(creator)
@@ -156,78 +140,74 @@ module garage_token::coins {
                 attribute
             }
         );
-        DesignObjectId{
-            id: object::address_to_object_id(
-               signer::address_of(&token_signer)
-            )
-        }
+        object::address_to_object(signer::address_of(&token_signer))
     }
 
     fun compose_coin(
         owner: &signer,
-        coin: CoinObjectId,
-        design: DesignObjectId
+        coin_obj: Object<Coin>,
+        design_obj: Object<Design>
     )
     acquires Coin {
         assert!(
-            exists_coin(&coin),
+            exists<Coin>(object::object_address(&coin_obj)),
             error::not_found(E_NO_SUCH_COINS)
         );
         assert!(
-            exists_design(&design),
+            exists<Design>(object::object_address(&design_obj)),
             error::not_found(E_NO_SUCH_DESIGN)
         );
         let owner_addr = signer::address_of(owner);
         assert!(
-            object::is_owner(coin.id, owner_addr),
+            object::is_owner(coin_obj, owner_addr),
             error::permission_denied(E_NOT_OWNER)
         );
         assert!(
-            object::is_owner(design.id, owner_addr),
+            object::is_owner(design_obj, owner_addr),
             error::permission_denied(E_NOT_OWNER)
         );
 
-        let coin_obj = borrow_global_mut<Coin>(
-            object::object_id_address(&coin.id)
+        let coin = borrow_global_mut<Coin>(
+            object::object_address(&coin_obj)
         );
-        option::fill(&mut coin_obj.design, design);
+        option::fill(&mut coin.design, design_obj);
         object::transfer_to_object(
             owner,
-            design.id,
-            coin.id
+            design_obj,
+            coin_obj
         );
     }
 
     fun decompose_coin(
         owner: &signer,
-        coin: CoinObjectId,
-        design: DesignObjectId
+        coin_obj: Object<Coin>,
+        design_obj: Object<Design>
     )
     acquires Coin {
+        let coin_obj_addr = object::object_address(&coin_obj);
         assert!(
-            exists_coin(&coin),
+            exists<Coin>(coin_obj_addr),
             error::not_found(E_NO_SUCH_COINS)
         );
         let owner_addr = signer::address_of(owner);
         assert!(
-            object::is_owner(coin.id, owner_addr),
+            object::is_owner(coin_obj, owner_addr),
             error::permission_denied(E_NOT_OWNER)
         );
 
-        let coin_obj_addr = object::object_id_address(&coin.id);
-        let coin_obj = borrow_global_mut<Coin>(coin_obj_addr);
-        let stored_design = option::extract(&mut coin_obj.design);
+        let coin = borrow_global_mut<Coin>(coin_obj_addr);
+        let stored_design = option::extract(&mut coin.design);
         assert!(
-            stored_design == design,
+            stored_design == design_obj,
             error::invalid_argument(E_INVALID_DESIGN)
         );
         assert!(
-            object::is_owner(design.id, coin_obj_addr),
+            object::is_owner(design_obj, coin_obj_addr),
             error::permission_denied(E_NOT_OWNER)
         );
         object::transfer(
             owner,
-            design.id,
+            design_obj,
             owner_addr
         );
     }
@@ -251,17 +231,17 @@ module garage_token::coins {
             utf8(b"design-00-url")
         );
         let addr = signer::address_of(account);
-        assert!(object::is_owner(coin.id, addr), 0);
-        assert!(object::is_owner(design_birthday.id, addr), 1);
+        assert!(object::is_owner(coin, addr), 0);
+        assert!(object::is_owner(design_birthday, addr), 1);
 
-        let coin_obj_addr = object::object_id_address(&coin.id);
+        let coin_obj_addr = object::object_address(&coin);
         compose_coin(account, coin, design_birthday);
-        assert!(object::is_owner(coin.id, addr), 2);
-        assert!(object::is_owner(design_birthday.id, coin_obj_addr), 3);
+        assert!(object::is_owner(coin, addr), 2);
+        assert!(object::is_owner(design_birthday, coin_obj_addr), 3);
         
         decompose_coin(account, coin, design_birthday);
-        assert!(object::is_owner(coin.id, addr), 4);
-        assert!(object::is_owner(design_birthday.id, addr), 5);
+        assert!(object::is_owner(coin, addr), 4);
+        assert!(object::is_owner(design_birthday, addr), 5);
 
         let design_graduation = create_design(
             account,
@@ -270,10 +250,10 @@ module garage_token::coins {
             utf8(b"happy-graduation"),
             utf8(b"design-01-url")
         );
-        assert!(object::is_owner(design_graduation.id, addr), 6);
+        assert!(object::is_owner(design_graduation, addr), 6);
         compose_coin(account, coin, design_graduation);
-        assert!(object::is_owner(coin.id, addr), 7);
-        assert!(object::is_owner(design_graduation.id, coin_obj_addr), 8);
+        assert!(object::is_owner(coin, addr), 7);
+        assert!(object::is_owner(design_graduation, coin_obj_addr), 8);
     }
 
     #[test(
@@ -299,17 +279,14 @@ module garage_token::coins {
         );
         compose_coin(account, coin, design);
         let recipient_addr = signer::address_of(other);
-        object::transfer(account, coin.id, recipient_addr);
-        assert!(object::is_owner(coin.id, recipient_addr), 0);
-        assert!(object::is_owner(design.id, object::object_id_address(&coin.id)), 1);
+        object::transfer(account, coin, recipient_addr);
+        assert!(object::is_owner(coin, recipient_addr), 0);
+        assert!(object::is_owner(design, object::object_address(&coin)), 1);
     }
 
     #[test(account = @0x123)]
-    #[expected_failure(
-        abort_code = 0x60002,
-        location = Self
-    )]
-    fun test_compose_invalid_design(account: &signer)
+    #[expected_failure]
+    fun test_compose_not_exist_design(account: &signer)
     acquires CoinsOnChainConfig, Coin {
         init_module(account);
         
@@ -319,9 +296,7 @@ module garage_token::coins {
             utf8(b"coin-00"),
             utf8(b"coin-00-url"),
         );
-        let design = DesignObjectId{
-            id: coin.id
-        };
+        let design = object::address_to_object<Design>(@0xbad);
         compose_coin(account, coin, design);
     }
 
@@ -350,7 +325,7 @@ module garage_token::coins {
             utf8(b"happy-graduation"),
             utf8(b"design-01-url")
         );
-        object::transfer(account, coin.id, signer::address_of(other));
+        object::transfer(account, coin, signer::address_of(other));
         compose_coin(account, coin, design);
     }
 
@@ -379,7 +354,7 @@ module garage_token::coins {
             utf8(b"happy-graduation"),
             utf8(b"design-01-url")
         );
-        object::transfer(account, design.id, signer::address_of(other));
+        object::transfer(account, design, signer::address_of(other));
         compose_coin(account, coin, design);
     }
 
@@ -409,7 +384,7 @@ module garage_token::coins {
             utf8(b"design-01-url")
         );
         compose_coin(account, coin, design);
-        object::transfer(account, coin.id, signer::address_of(other));
+        object::transfer(account, coin, signer::address_of(other));
         decompose_coin(account, coin, design);
     }
 
@@ -436,10 +411,14 @@ module garage_token::coins {
             utf8(b"design-00-url")
         );
         compose_coin(account, coin, design_birthday);
-        let design = DesignObjectId{
-            id: coin.id
-        };
-        decompose_coin(account, coin, design);
+        let design_birthday_mistake = create_design(
+            account,
+            utf8(b"coin-design-01"),
+            utf8(b"design-01"),
+            utf8(b"happy-birthdday"),
+            utf8(b"design-01-url")
+        );
+        decompose_coin(account, coin, design_birthday_mistake);
     }
 
     #[test(

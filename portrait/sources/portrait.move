@@ -7,7 +7,7 @@ module garage_token::portrait {
     use std::signer;
     use std::string::{String, utf8};
     use std::option::{Self, Option};
-    use aptos_framework::object::{Self, ObjectId};
+    use aptos_framework::object::{Self, Object};
     use token_objects::collection;
     use token_objects::token::{Self, MutabilityConfig};
 
@@ -15,6 +15,7 @@ module garage_token::portrait {
     const E_NO_SUCH_PARTS: u64 = 2;
     const E_INVALID_PARTS: u64 = 3;
     const E_NOT_OWNER: u64 = 4;
+    const E_INVALID_PARTS_ID: u64 = 5;
 
     struct PortraitOnChainConfig has key {
         portrait_collection_name: String,
@@ -23,20 +24,16 @@ module garage_token::portrait {
         parts_mutability_config: MutabilityConfig
     }
 
-    struct TypedObjectId<phantom P> has store, copy, drop {
-        id: ObjectId
-    }
-
     #[resource_group_member(
         group = object::ObjectGroup
     )]
     struct PortraitBase has key {
-        face: Option<TypedObjectId<Face>>,
-        hair: Option<TypedObjectId<Hair>>,
-        ear: Option<TypedObjectId<Ear>>,
-        nose: Option<TypedObjectId<Nose>>,
-        eyes: Option<TypedObjectId<Eyes>>,
-        mouth: Option<TypedObjectId<Mouth>>
+        face: Option<Object<Parts<Face>>>,
+        hair: Option<Object<Parts<Hair>>>,
+        ear: Option<Object<Parts<Ear>>>,
+        nose: Option<Object<Parts<Nose>>>,
+        eyes: Option<Object<Parts<Eyes>>>,
+        mouth: Option<Object<Parts<Mouth>>>
     }
 
     #[resource_group_member(
@@ -52,14 +49,6 @@ module garage_token::portrait {
     struct Nose {}
     struct Eyes {}
     struct Mouth {}
-
-    public fun exists_base(base: &TypedObjectId<PortraitBase>): bool {
-        exists<PortraitBase>(object::object_id_address(&base.id))
-    }
-
-    public fun exists_parts<P>(parts: &TypedObjectId<P>): bool {
-        exists<Parts<P>>(object::object_id_address(&parts.id))
-    }
 
     fun init_module(caller: &signer) {
         let portrait_collection_name = utf8(b"garage-token");
@@ -101,7 +90,7 @@ module garage_token::portrait {
         description: String,
         name: String,
         uri: String
-    ): TypedObjectId<PortraitBase>
+    ): Object<PortraitBase>
     acquires PortraitOnChainConfig {
         let on_chain_config = borrow_global<PortraitOnChainConfig>(
             signer::address_of(creator)
@@ -127,11 +116,7 @@ module garage_token::portrait {
                 mouth: option::none()
             }
         );
-        TypedObjectId<PortraitBase>{
-            id: object::address_to_object_id(
-                signer::address_of(&token_signer)
-            )
-        }
+        object::address_to_object(signer::address_of(&token_signer))
     }
 
     fun create<P>(
@@ -140,7 +125,7 @@ module garage_token::portrait {
         name: String,
         attribute: String,
         uri: String
-    ): TypedObjectId<P>
+    ): Object<Parts<P>>
     acquires PortraitOnChainConfig {
         let on_chain_config = borrow_global<PortraitOnChainConfig>(
             signer::address_of(creator)
@@ -161,370 +146,326 @@ module garage_token::portrait {
                 attribute
             }
         );
-        TypedObjectId<P>{
-            id: object::address_to_object_id(
-                signer::address_of(&token_signer)
-            )
-        }
+        object::address_to_object<Parts<P>>(signer::address_of(&token_signer))
     }
 
-    fun put_on_check<P>(
+    inline fun put_on_check<P>(
         owner: &signer,
-        base: TypedObjectId<PortraitBase>,
-        parts: TypedObjectId<P>
+        base: Object<PortraitBase>,
+        parts: Object<Parts<P>>
     ) {
         assert!(
-            exists_base(&base),
+            exists<PortraitBase>(object::object_address(&base)),
             error::not_found(E_NO_SUCH_PORTRAIT_BASE)
         );
         assert!(
-            exists_parts<P>(&parts),
+            exists<Parts<P>>(object::object_address(&parts)),
             error::not_found(E_NO_SUCH_PARTS)
         );
         let owner_addr = signer::address_of(owner);
         assert!(
-            object::is_owner(base.id, owner_addr),
+            object::is_owner(base, owner_addr),
             error::permission_denied(E_NOT_OWNER)
         );
         assert!(
-            object::is_owner(parts.id, owner_addr),
+            object::is_owner(parts, owner_addr),
             error::permission_denied(E_NOT_OWNER)
         );
     }
 
     fun put_on_hair(
         owner: &signer,
-        base: TypedObjectId<PortraitBase>,
-        parts: TypedObjectId<Hair>
+        base_obj: Object<PortraitBase>,
+        parts_obj: Object<Parts<Hair>>
     )
     acquires PortraitBase {
         put_on_check<Hair>(
             owner,
-            base,
-            parts
+            base_obj,
+            parts_obj
         );
-        let base_obj = borrow_global_mut<PortraitBase>(
-            object::object_id_address(&base.id)
+        let base = borrow_global_mut<PortraitBase>(
+            object::object_address(&base_obj)
         );
-        option::fill(&mut base_obj.hair, parts);
+        option::fill(&mut base.hair, parts_obj);
         object::transfer_to_object(
             owner,
-            parts.id,
-            base.id
+            parts_obj,
+            base_obj
         );
     }
 
     fun put_on_face(
         owner: &signer,
-        base: TypedObjectId<PortraitBase>,
-        parts: TypedObjectId<Face>
+        base_obj: Object<PortraitBase>,
+        parts_obj: Object<Parts<Face>>
     )
     acquires PortraitBase {
         put_on_check<Face>(
             owner,
-            base,
-            parts
+            base_obj,
+            parts_obj
         );
-        let base_obj = borrow_global_mut<PortraitBase>(
-            object::object_id_address(&base.id)
+        let base = borrow_global_mut<PortraitBase>(
+            object::object_address(&base_obj)
         );
-        option::fill(&mut base_obj.face, parts);
+        option::fill(&mut base.face, parts_obj);
         object::transfer_to_object(
             owner,
-            parts.id,
-            base.id
+            parts_obj,
+            base_obj
         );
     }
 
     fun put_on_ear(
         owner: &signer,
-        base: TypedObjectId<PortraitBase>,
-        parts: TypedObjectId<Ear>
+        base_obj: Object<PortraitBase>,
+        parts_obj: Object<Parts<Ear>>
     )
     acquires PortraitBase {
         put_on_check<Ear>(
             owner,
-            base,
-            parts
+            base_obj,
+            parts_obj
         );
-        let base_obj = borrow_global_mut<PortraitBase>(
-            object::object_id_address(&base.id)
+        let base = borrow_global_mut<PortraitBase>(
+            object::object_address(&base_obj)
         );
-        option::fill(&mut base_obj.ear, parts);
+        option::fill(&mut base.ear, parts_obj);
         object::transfer_to_object(
             owner,
-            parts.id,
-            base.id
+            parts_obj,
+            base_obj
         );
     }
 
     fun put_on_nose(
         owner: &signer,
-        base: TypedObjectId<PortraitBase>,
-        parts: TypedObjectId<Nose>
+        base_obj: Object<PortraitBase>,
+        parts_obj: Object<Parts<Nose>>
     )
     acquires PortraitBase {
         put_on_check<Nose>(
             owner,
-            base,
-            parts
+            base_obj,
+            parts_obj
         );
-        let base_obj = borrow_global_mut<PortraitBase>(
-            object::object_id_address(&base.id)
+        let base = borrow_global_mut<PortraitBase>(
+            object::object_address(&base_obj)
         );
-        option::fill(&mut base_obj.nose, parts);
+        option::fill(&mut base.nose, parts_obj);
         object::transfer_to_object(
             owner,
-            parts.id,
-            base.id
+            parts_obj,
+            base_obj
         );
     }
 
     fun put_on_eyes(
         owner: &signer,
-        base: TypedObjectId<PortraitBase>,
-        parts: TypedObjectId<Eyes>
+        base_obj: Object<PortraitBase>,
+        parts_obj: Object<Parts<Eyes>>
     )
     acquires PortraitBase {
         put_on_check<Eyes>(
             owner,
-            base,
-            parts
+            base_obj,
+            parts_obj
         );
-        let base_obj = borrow_global_mut<PortraitBase>(
-            object::object_id_address(&base.id)
+        let base = borrow_global_mut<PortraitBase>(
+            object::object_address(&base_obj)
         );
-        option::fill(&mut base_obj.eyes, parts);
+        option::fill(&mut base.eyes, parts_obj);
         object::transfer_to_object(
             owner,
-            parts.id,
-            base.id
+            parts_obj,
+            base_obj
         );
     }
 
     fun put_on_mouth(
         owner: &signer,
-        base: TypedObjectId<PortraitBase>,
-        parts: TypedObjectId<Mouth>
+        base_obj: Object<PortraitBase>,
+        parts_obj: Object<Parts<Mouth>>
     )
     acquires PortraitBase {
         put_on_check<Mouth>(
             owner,
-            base,
-            parts
+            base_obj,
+            parts_obj
         );
-        let base_obj = borrow_global_mut<PortraitBase>(
-            object::object_id_address(&base.id)
+        let base = borrow_global_mut<PortraitBase>(
+            object::object_address(&base_obj)
         );
-        option::fill(&mut base_obj.mouth, parts);
+        option::fill(&mut base.mouth, parts_obj);
         object::transfer_to_object(
             owner,
-            parts.id,
-            base.id
+            parts_obj,
+            base_obj
+        );
+    }
+
+    inline fun take_off_check(
+        owner: &signer,
+        base: Object<PortraitBase>
+    ) {
+        assert!(
+            exists<PortraitBase>(object::object_address(&base)),
+            error::not_found(E_NO_SUCH_PORTRAIT_BASE)
+        );
+        assert!(
+            object::is_owner(base, signer::address_of(owner)),
+            error::permission_denied(E_NOT_OWNER)
         );
     }
 
     fun take_off_hair(
         owner: &signer,
-        base: TypedObjectId<PortraitBase>,
-        parts: TypedObjectId<Hair>
+        base_obj: Object<PortraitBase>,
+        parts_obj: Object<Parts<Hair>>
     )
     acquires PortraitBase {
+        take_off_check(owner, base_obj);
+        let base_obj_addr = object::object_address(&base_obj);
+        let base = borrow_global_mut<PortraitBase>(base_obj_addr);
+        let stored_parts = option::extract(&mut base.hair);
         assert!(
-            exists_base(&base),
-            error::not_found(E_NO_SUCH_PORTRAIT_BASE)
-        );
-        let owner_addr = signer::address_of(owner);
-        assert!(
-            object::is_owner(base.id, owner_addr),
-            error::permission_denied(E_NOT_OWNER)
-        );
-
-        let base_obj_addr = object::object_id_address(&base.id);
-        let base_obj = borrow_global_mut<PortraitBase>(base_obj_addr);
-        let stored_parts = option::extract(&mut base_obj.hair);
-        assert!(
-            stored_parts == parts,
+            stored_parts == parts_obj,
             error::invalid_argument(E_INVALID_PARTS)
         );
         assert!(
-            object::is_owner(parts.id, base_obj_addr),
+            object::is_owner(parts_obj, base_obj_addr),
             error::permission_denied(E_NOT_OWNER)
         );
         object::transfer(
             owner,
-            parts.id,
-            owner_addr
+            parts_obj,
+            signer::address_of(owner)
         );
     }
 
     fun take_off_face(
         owner: &signer,
-        base: TypedObjectId<PortraitBase>,
-        parts: TypedObjectId<Face>
+        base_obj: Object<PortraitBase>,
+        parts_obj: Object<Parts<Face>>
     )
     acquires PortraitBase {
+        take_off_check(owner, base_obj);
+        let base_obj_addr = object::object_address(&base_obj);
+        let base = borrow_global_mut<PortraitBase>(base_obj_addr);
+        let stored_parts = option::extract(&mut base.face);
         assert!(
-            exists_base(&base),
-            error::not_found(E_NO_SUCH_PORTRAIT_BASE)
-        );
-        let owner_addr = signer::address_of(owner);
-        assert!(
-            object::is_owner(base.id, owner_addr),
-            error::permission_denied(E_NOT_OWNER)
-        );
-
-        let base_obj_addr = object::object_id_address(&base.id);
-        let base_obj = borrow_global_mut<PortraitBase>(base_obj_addr);
-        let stored_parts = option::extract(&mut base_obj.face);
-        assert!(
-            stored_parts == parts,
+            stored_parts == parts_obj,
             error::invalid_argument(E_INVALID_PARTS)
         );
         assert!(
-            object::is_owner(parts.id, base_obj_addr),
+            object::is_owner(parts_obj, base_obj_addr),
             error::permission_denied(E_NOT_OWNER)
         );
         object::transfer(
             owner,
-            parts.id,
-            owner_addr
+            parts_obj,
+            signer::address_of(owner)
         );
     }
 
     fun take_off_ear(
         owner: &signer,
-        base: TypedObjectId<PortraitBase>,
-        parts: TypedObjectId<Ear>
+        base_obj: Object<PortraitBase>,
+        parts_obj: Object<Parts<Ear>>
     )
     acquires PortraitBase {
+        take_off_check(owner, base_obj);
+        let base_obj_addr = object::object_address(&base_obj);
+        let base = borrow_global_mut<PortraitBase>(base_obj_addr);
+        let stored_parts = option::extract(&mut base.ear);
         assert!(
-            exists_base(&base),
-            error::not_found(E_NO_SUCH_PORTRAIT_BASE)
-        );
-        let owner_addr = signer::address_of(owner);
-        assert!(
-            object::is_owner(base.id, owner_addr),
-            error::permission_denied(E_NOT_OWNER)
-        );
-
-        let base_obj_addr = object::object_id_address(&base.id);
-        let base_obj = borrow_global_mut<PortraitBase>(base_obj_addr);
-        let stored_parts = option::extract(&mut base_obj.ear);
-        assert!(
-            stored_parts == parts,
+            stored_parts == parts_obj,
             error::invalid_argument(E_INVALID_PARTS)
         );
         assert!(
-            object::is_owner(parts.id, base_obj_addr),
+            object::is_owner(parts_obj, base_obj_addr),
             error::permission_denied(E_NOT_OWNER)
         );
         object::transfer(
             owner,
-            parts.id,
-            owner_addr
+            parts_obj,
+            signer::address_of(owner)
         );
     }
 
     fun take_off_nose(
         owner: &signer,
-        base: TypedObjectId<PortraitBase>,
-        parts: TypedObjectId<Nose>
+        base_obj: Object<PortraitBase>,
+        parts_obj: Object<Parts<Nose>>
     )
     acquires PortraitBase {
+        take_off_check(owner, base_obj);
+        let base_obj_addr = object::object_address(&base_obj);
+        let base = borrow_global_mut<PortraitBase>(base_obj_addr);
+        let stored_parts = option::extract(&mut base.nose);
         assert!(
-            exists_base(&base),
-            error::not_found(E_NO_SUCH_PORTRAIT_BASE)
-        );
-        let owner_addr = signer::address_of(owner);
-        assert!(
-            object::is_owner(base.id, owner_addr),
-            error::permission_denied(E_NOT_OWNER)
-        );
-
-        let base_obj_addr = object::object_id_address(&base.id);
-        let base_obj = borrow_global_mut<PortraitBase>(base_obj_addr);
-        let stored_parts = option::extract(&mut base_obj.nose);
-        assert!(
-            stored_parts == parts,
+            stored_parts == parts_obj,
             error::invalid_argument(E_INVALID_PARTS)
         );
         assert!(
-            object::is_owner(parts.id, base_obj_addr),
+            object::is_owner(parts_obj, base_obj_addr),
             error::permission_denied(E_NOT_OWNER)
         );
         object::transfer(
             owner,
-            parts.id,
-            owner_addr
+            parts_obj,
+            signer::address_of(owner)
         );
     }
 
     fun take_off_eyes(
         owner: &signer,
-        base: TypedObjectId<PortraitBase>,
-        parts: TypedObjectId<Eyes>
+        base_obj: Object<PortraitBase>,
+        parts_obj: Object<Parts<Eyes>>
     )
     acquires PortraitBase {
+        take_off_check(owner, base_obj);
+        let base_obj_addr = object::object_address(&base_obj);
+        let base = borrow_global_mut<PortraitBase>(base_obj_addr);
+        let stored_parts = option::extract(&mut base.eyes);
         assert!(
-            exists_base(&base),
-            error::not_found(E_NO_SUCH_PORTRAIT_BASE)
-        );
-        let owner_addr = signer::address_of(owner);
-        assert!(
-            object::is_owner(base.id, owner_addr),
-            error::permission_denied(E_NOT_OWNER)
-        );
-
-        let base_obj_addr = object::object_id_address(&base.id);
-        let base_obj = borrow_global_mut<PortraitBase>(base_obj_addr);
-        let stored_parts = option::extract(&mut base_obj.eyes);
-        assert!(
-            stored_parts == parts,
+            stored_parts == parts_obj,
             error::invalid_argument(E_INVALID_PARTS)
         );
         assert!(
-            object::is_owner(parts.id, base_obj_addr),
+            object::is_owner(parts_obj, base_obj_addr),
             error::permission_denied(E_NOT_OWNER)
         );
         object::transfer(
             owner,
-            parts.id,
-            owner_addr
+            parts_obj,
+            signer::address_of(owner)
         );
     }
 
     fun take_off_mouth(
         owner: &signer,
-        base: TypedObjectId<PortraitBase>,
-        parts: TypedObjectId<Mouth>
+        base_obj: Object<PortraitBase>,
+        parts_obj: Object<Parts<Mouth>>
     )
     acquires PortraitBase {
+        take_off_check(owner, base_obj);
+        let base_obj_addr = object::object_address(&base_obj);
+        let base = borrow_global_mut<PortraitBase>(base_obj_addr);
+        let stored_parts = option::extract(&mut base.mouth);
         assert!(
-            exists_base(&base),
-            error::not_found(E_NO_SUCH_PORTRAIT_BASE)
-        );
-        let owner_addr = signer::address_of(owner);
-        assert!(
-            object::is_owner(base.id, owner_addr),
-            error::permission_denied(E_NOT_OWNER)
-        );
-
-        let base_obj_addr = object::object_id_address(&base.id);
-        let base_obj = borrow_global_mut<PortraitBase>(base_obj_addr);
-        let stored_parts = option::extract(&mut base_obj.mouth);
-        assert!(
-            stored_parts == parts,
+            stored_parts == parts_obj,
             error::invalid_argument(E_INVALID_PARTS)
         );
         assert!(
-            object::is_owner(parts.id, base_obj_addr),
+            object::is_owner(parts_obj, base_obj_addr),
             error::permission_denied(E_NOT_OWNER)
         );
         object::transfer(
             owner,
-            parts.id,
-            owner_addr
+            parts_obj,
+            signer::address_of(owner)
         );
     }
 
@@ -540,8 +481,8 @@ module garage_token::portrait {
             utf8(b"portrait-00"),
             utf8(b"portrait-00-url")
         );
-        assert!(object::is_owner(base.id, addr), 0);
-        let base_obj_addr = object::object_id_address(&base.id);
+        assert!(object::is_owner(base, addr), 0);
+        let base_obj_addr = object::object_address(&base);
 
         let parts = create<Hair>(
             account,
@@ -550,12 +491,12 @@ module garage_token::portrait {
             utf8(b"hair"),
             utf8(b"parts-00-url")
         );
-        assert!(object::is_owner(parts.id, addr), 1);
+        assert!(object::is_owner(parts, addr), 1);
         put_on_hair(account, base, parts);
-        assert!(object::is_owner(parts.id, base_obj_addr), 2);
+        assert!(object::is_owner(parts, base_obj_addr), 2);
 
         take_off_hair(account, base, parts);
-        assert!(object::is_owner(parts.id, addr), 3);
+        assert!(object::is_owner(parts, addr), 3);
     }
 
     #[test(account = @123)]
@@ -570,8 +511,8 @@ module garage_token::portrait {
             utf8(b"portrait-00"),
             utf8(b"portrait-00-url")
         );
-        assert!(object::is_owner(base.id, addr), 0);
-        let base_obj_addr = object::object_id_address(&base.id);
+        assert!(object::is_owner(base, addr), 0);
+        let base_obj_addr = object::object_address(&base);
 
         let parts = create<Face>(
             account,
@@ -580,12 +521,12 @@ module garage_token::portrait {
             utf8(b"face"),
             utf8(b"parts-00-url")
         );
-        assert!(object::is_owner(parts.id, addr), 1);
+        assert!(object::is_owner(parts, addr), 1);
         put_on_face(account, base, parts);
-        assert!(object::is_owner(parts.id, base_obj_addr), 2);
+        assert!(object::is_owner(parts, base_obj_addr), 2);
 
         take_off_face(account, base, parts);
-        assert!(object::is_owner(parts.id, addr), 3);
+        assert!(object::is_owner(parts, addr), 3);
     }
 
     #[test(account = @123)]
@@ -600,8 +541,8 @@ module garage_token::portrait {
             utf8(b"portrait-00"),
             utf8(b"portrait-00-url")
         );
-        assert!(object::is_owner(base.id, addr), 0);
-        let base_obj_addr = object::object_id_address(&base.id);
+        assert!(object::is_owner(base, addr), 0);
+        let base_obj_addr = object::object_address(&base);
 
         let parts = create<Ear>(
             account,
@@ -610,12 +551,12 @@ module garage_token::portrait {
             utf8(b"ear"),
             utf8(b"parts-00-url")
         );
-        assert!(object::is_owner(parts.id, addr), 1);
+        assert!(object::is_owner(parts, addr), 1);
         put_on_ear(account, base, parts);
-        assert!(object::is_owner(parts.id, base_obj_addr), 2);
+        assert!(object::is_owner(parts, base_obj_addr), 2);
 
         take_off_ear(account, base, parts);
-        assert!(object::is_owner(parts.id, addr), 3);
+        assert!(object::is_owner(parts, addr), 3);
     }
 
     #[test(account = @123)]
@@ -630,8 +571,8 @@ module garage_token::portrait {
             utf8(b"portrait-00"),
             utf8(b"portrait-00-url")
         );
-        assert!(object::is_owner(base.id, addr), 0);
-        let base_obj_addr = object::object_id_address(&base.id);
+        assert!(object::is_owner(base, addr), 0);
+        let base_obj_addr = object::object_address(&base);
 
         let parts = create<Ear>(
             account,
@@ -640,12 +581,12 @@ module garage_token::portrait {
             utf8(b"nose"),
             utf8(b"parts-00-url")
         );
-        assert!(object::is_owner(parts.id, addr), 1);
+        assert!(object::is_owner(parts, addr), 1);
         put_on_ear(account, base, parts);
-        assert!(object::is_owner(parts.id, base_obj_addr), 2);
+        assert!(object::is_owner(parts, base_obj_addr), 2);
 
         take_off_ear(account, base, parts);
-        assert!(object::is_owner(parts.id, addr), 3);
+        assert!(object::is_owner(parts, addr), 3);
     }
 
     #[test(account = @123)]
@@ -660,8 +601,8 @@ module garage_token::portrait {
             utf8(b"portrait-00"),
             utf8(b"portrait-00-url")
         );
-        assert!(object::is_owner(base.id, addr), 0);
-        let base_obj_addr = object::object_id_address(&base.id);
+        assert!(object::is_owner(base, addr), 0);
+        let base_obj_addr = object::object_address(&base);
 
         let parts = create<Eyes>(
             account,
@@ -670,12 +611,12 @@ module garage_token::portrait {
             utf8(b"eyes"),
             utf8(b"parts-00-url")
         );
-        assert!(object::is_owner(parts.id, addr), 1);
+        assert!(object::is_owner(parts, addr), 1);
         put_on_eyes(account, base, parts);
-        assert!(object::is_owner(parts.id, base_obj_addr), 2);
+        assert!(object::is_owner(parts, base_obj_addr), 2);
 
         take_off_eyes(account, base, parts);
-        assert!(object::is_owner(parts.id, addr), 3);
+        assert!(object::is_owner(parts, addr), 3);
     }
 
     #[test(account = @123)]
@@ -690,8 +631,8 @@ module garage_token::portrait {
             utf8(b"portrait-00"),
             utf8(b"portrait-00-url")
         );
-        assert!(object::is_owner(base.id, addr), 0);
-        let base_obj_addr = object::object_id_address(&base.id);
+        assert!(object::is_owner(base, addr), 0);
+        let base_obj_addr = object::object_address(&base);
 
         let parts = create<Mouth>(
             account,
@@ -700,11 +641,11 @@ module garage_token::portrait {
             utf8(b"mouth"),
             utf8(b"parts-00-url")
         );
-        assert!(object::is_owner(parts.id, addr), 1);
+        assert!(object::is_owner(parts, addr), 1);
         put_on_mouth(account, base, parts);
-        assert!(object::is_owner(parts.id, base_obj_addr), 2);
+        assert!(object::is_owner(parts, base_obj_addr), 2);
 
         take_off_mouth(account, base, parts);
-        assert!(object::is_owner(parts.id, addr), 3);
+        assert!(object::is_owner(parts, addr), 3);
     }
 }
