@@ -2,6 +2,11 @@
 // object can be transfered through any contracts.
 // this behavior is different from classic smart contracts.
 
+// memo:
+// object address can be computed in js. see object::create_object_address.
+// todo:
+// test to get from js sdk
+
 // simple idea with move object model.
 // "Coin" resource has fixed supply, so this is like NFT
 // that is reusable, and is tradable.
