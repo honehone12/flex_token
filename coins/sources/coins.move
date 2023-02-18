@@ -1,11 +1,14 @@
 // one interesting thing should be in mind.
 // object can be transfered through any contracts.
 // this behavior is different from classic smart contracts.
-
-// memo:
-// object address can be computed in js. see object::create_object_address.
+// means solidity like item-owner-map defined in higher than object layer
+// does not work.
+// so, in aptos, how to get objects owned by user without checking entire collections ??
+// 
+// may be we want ObjectTokenHolder that is holding objects(addresses)
+// and stored in user account address.
 // todo:
-// test to get from js sdk
+// anyway, write ObjectTokenHolder
 
 // simple idea with move object model.
 // "Coin" resource has fixed supply, so this is like NFT
