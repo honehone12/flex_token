@@ -10,6 +10,14 @@
 // todo:
 // anyway, write ObjectTokenHolder
 
+// or, simply found out 
+// use move classic resource on top level,
+// then use object model for childs.
+// - parent resource
+//   - child object
+//   - child object
+//     - child object
+
 // simple idea with move object model.
 // "Coin" resource has fixed supply, so this is like NFT
 // that is reusable, and is tradable.
