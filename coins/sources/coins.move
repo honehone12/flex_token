@@ -7,12 +7,9 @@
 // 
 // may be we want ObjectTokenHolder that is holding objects(addresses)
 // and stored in user account address.
-// todo:
-// anyway, write ObjectTokenHolder
-
-// or, simply found out 
-// use move classic resource on top level,
-// then use object model for childs.
+// 
+// simply use move classic resource on top level is not allowed.
+// because resource does not have own address.
 // - parent resource
 //   - child object
 //   - child object
