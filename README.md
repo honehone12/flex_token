@@ -1,11 +1,8 @@
 # garage_token
-what if the design of tokens or coins are customizable?  
-it can be fun! 
+Customizable, updatable token written in move object model.
 
-customizable tokens can be achieved with move object model.  
+Move object model allow us flexible hierarchical structure for token.  
 https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/move-examples/token_objects/sources/hero.move  
+Token is now NOT just a integer in map, but object.
 
-an interesting effect of customizable tokens may be that price can be devided into
-market-price like current distributed NFTs and fixed-price.  
-this can mean who are really worring about risk of market price can also
-join as a crator of "parts of token".
+I hope more web3 game developpers pay attention to move language.
