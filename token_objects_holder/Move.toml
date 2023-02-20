@@ -1,5 +1,5 @@
 [package]
-name = 'token_objects_holder'
+name = 'TokenObjectsHolder'
 version = '1.0.0'
 
 [dependencies]

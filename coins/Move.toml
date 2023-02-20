@@ -8,3 +8,4 @@ garage_token = "0xcafe"
 [dependencies]
 AptosFramework = { local = "../../../aptos-core/aptos-move/framework/aptos-framework" }
 TokenObjects = { local = "../framework" }
+TokenObjectsHolder = { local = "../token_objects_holder" }

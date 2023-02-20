@@ -1,26 +1,5 @@
-// one interesting thing should be in mind.
-// object can be transfered through any contracts.
-// this behavior is different from classic smart contracts.
-// means solidity like item-owner-map defined in higher than object layer
-// does not work.
-// so, in aptos, how to get objects owned by user without checking entire collections ??
-// 
-// may be we want ObjectTokenHolder that is holding objects(addresses)
-// and stored in user account address.
-// 
-// simply use move classic resource on top level is not allowed.
-// because resource does not have own address.
-// - parent resource
-//   - child object
-//   - child object
-//     - child object
-
-// simple idea with move object model.
-// "Coin" resource has fixed supply, so this is like NFT
-// that is reusable, and is tradable.
-// means "Coin" is not fungible token, but looks-like-coin NFT.
-// "Design" resource does not have supply limitation, so
-// this can be sold with fixed-price.
+// now only module owner can mint,
+// need to publish to resource account
 
 module garage_token::coins {
     use std::signer;
@@ -30,6 +9,8 @@ module garage_token::coins {
     use aptos_framework::object::{Self, Object};
     use token_objects::collection;
     use token_objects::token::{Self, MutabilityConfig};
+    use garage_token::token_objects_holder;
+
 
     const E_NO_SUCH_COINS: u64 = 1;
     const E_NO_SUCH_DESIGN: u64 = 2;
@@ -104,8 +85,9 @@ module garage_token::coins {
         uri: String
     ): Object<Coin>
     acquires CoinsOnChainConfig {
+        let creator_addr = signer::address_of(creator); 
         let on_chain_config = borrow_global<CoinsOnChainConfig>(
-            signer::address_of(creator)
+            creator_addr
         );
         let creator_ref = token::create_token(
             creator,
@@ -123,7 +105,10 @@ module garage_token::coins {
                 design: option::none()
             }
         );
-        object::address_to_object(signer::address_of(&token_signer))
+        let obj = object::address_to_object(signer::address_of(&token_signer));
+        token_objects_holder::register<Coin>(creator);
+        token_objects_holder::add_to_holder(creator_addr, obj);
+        obj
     }
 
     fun create_design(
@@ -134,8 +119,9 @@ module garage_token::coins {
         uri: String,
     ): Object<Design>
     acquires CoinsOnChainConfig {
+        let creator_addr = signer::address_of(creator);
         let on_chain_config = borrow_global<CoinsOnChainConfig>(
-            signer::address_of(creator)
+            creator_addr
         );
         let creator_ref = token::create_token(
             creator,
@@ -153,7 +139,26 @@ module garage_token::coins {
                 attribute
             }
         );
-        object::address_to_object(signer::address_of(&token_signer))
+        let obj = object::address_to_object(signer::address_of(&token_signer));
+        token_objects_holder::register<Design>(creator);
+        token_objects_holder::add_to_holder(creator_addr, obj);
+        obj
+    }
+
+    fun transfer_coin(
+        owner: &signer,
+        coin_obj: Object<Coin>,
+        receiver: address
+    ) {
+        let owner_addr = signer::address_of(owner);
+        assert!(
+            token_objects_holder::holds(owner_addr, coin_obj),
+            error::permission_denied(E_NOT_OWNER)
+        );
+
+        object::transfer(owner, coin_obj, receiver);
+        token_objects_holder::remove_from_holder(owner, coin_obj);
+        token_objects_holder::add_to_holder(receiver, coin_obj);
     }
 
     fun compose_coin(
@@ -179,16 +184,21 @@ module garage_token::coins {
             object::is_owner(design_obj, owner_addr),
             error::permission_denied(E_NOT_OWNER)
         );
+        assert!(
+            token_objects_holder::holds(owner_addr, coin_obj),
+            error::permission_denied(E_NOT_OWNER)
+        );
+        assert!(
+            token_objects_holder::holds(owner_addr, design_obj),
+            error::permission_denied(E_NOT_OWNER)
+        );
 
         let coin = borrow_global_mut<Coin>(
             object::object_address(&coin_obj)
         );
         option::fill(&mut coin.design, design_obj);
-        object::transfer_to_object(
-            owner,
-            design_obj,
-            coin_obj
-        );
+        object::transfer_to_object(owner, design_obj, coin_obj);
+        token_objects_holder::remove_from_holder(owner, design_obj);
     }
 
     fun decompose_coin(
@@ -207,6 +217,10 @@ module garage_token::coins {
             object::is_owner(coin_obj, owner_addr),
             error::permission_denied(E_NOT_OWNER)
         );
+        assert!(
+            token_objects_holder::holds(owner_addr, coin_obj),
+            error::permission_denied(E_NOT_OWNER)
+        );
 
         let coin = borrow_global_mut<Coin>(coin_obj_addr);
         let stored_design = option::extract(&mut coin.design);
@@ -218,11 +232,8 @@ module garage_token::coins {
             object::is_owner(design_obj, coin_obj_addr),
             error::permission_denied(E_NOT_OWNER)
         );
-        object::transfer(
-            owner,
-            design_obj,
-            owner_addr
-        );
+        object::transfer(owner, design_obj, owner_addr);
+        token_objects_holder::add_to_holder(owner_addr, design_obj);
     }
 
     #[test(account = @123)]
@@ -246,15 +257,22 @@ module garage_token::coins {
         let addr = signer::address_of(account);
         assert!(object::is_owner(coin, addr), 0);
         assert!(object::is_owner(design_birthday, addr), 1);
+        assert!(token_objects_holder::holds(addr, coin), 9);
+        assert!(token_objects_holder::holds(addr, design_birthday), 10);
 
         let coin_obj_addr = object::object_address(&coin);
         compose_coin(account, coin, design_birthday);
         assert!(object::is_owner(coin, addr), 2);
         assert!(object::is_owner(design_birthday, coin_obj_addr), 3);
-        
+        assert!(token_objects_holder::holds(addr, coin), 11);
+        assert!(!token_objects_holder::holds(addr, design_birthday), 12);
+
         decompose_coin(account, coin, design_birthday);
         assert!(object::is_owner(coin, addr), 4);
         assert!(object::is_owner(design_birthday, addr), 5);
+        assert!(token_objects_holder::holds(addr, coin), 13);
+        assert!(token_objects_holder::holds(addr, design_birthday), 14);
+
 
         let design_graduation = create_design(
             account,
@@ -264,9 +282,12 @@ module garage_token::coins {
             utf8(b"design-01-url")
         );
         assert!(object::is_owner(design_graduation, addr), 6);
+        assert!(token_objects_holder::holds(addr, design_graduation), 15);
+
         compose_coin(account, coin, design_graduation);
         assert!(object::is_owner(coin, addr), 7);
         assert!(object::is_owner(design_graduation, coin_obj_addr), 8);
+        assert!(!token_objects_holder::holds(addr, design_graduation), 16);
     }
 
     #[test(
