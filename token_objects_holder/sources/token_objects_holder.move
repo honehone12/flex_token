@@ -14,7 +14,7 @@ module garage_token::token_objects_holder {
         tokens: vector<Object<T>>
     }
 
-    fun new<T: key>(): TokenObjectsHolder<T> {
+    inline fun new<T: key>(): TokenObjectsHolder<T> {
         TokenObjectsHolder{
             tokens: vector::empty<Object<T>>()
         }
@@ -94,7 +94,7 @@ module garage_token::token_objects_holder {
         vector::swap_remove(&mut holder.tokens, idx);
     }
 
-    fun update<T: key>(account: &signer)
+    public fun update<T: key>(account: &signer)
     acquires TokenObjectsHolder {
         let addr = signer::address_of(account);
         assert!(
