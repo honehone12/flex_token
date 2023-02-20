@@ -1,4 +1,4 @@
-# garage_token
+# flex_token
 Customizable, updatable token written in move object model.
 
 Move object model allow us flexible hierarchical structure for token.  
