@@ -1,4 +1,4 @@
-module garage_token::token_objects_holder {
+module flex_token::token_objects_holder {
     use std::error;
     use std::signer;
     use std::vector;

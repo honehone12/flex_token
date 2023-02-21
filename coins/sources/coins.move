@@ -1,7 +1,7 @@
 // now only module owner can mint,
 // need to publish to resource account
 
-module garage_token::coins {
+module flex_token::coins {
     use std::signer;
     use std::error;
     use std::option::{Self, Option};
@@ -9,7 +9,7 @@ module garage_token::coins {
     use aptos_framework::object::{Self, Object};
     use token_objects::collection;
     use token_objects::token::{Self, MutabilityConfig};
-    use garage_token::token_objects_holder;
+    use flex_token::token_objects_holder;
 
     const E_NO_SUCH_COINS: u64 = 1;
     const E_NO_SUCH_DESIGN: u64 = 2;

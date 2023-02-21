@@ -2,7 +2,7 @@
 // the idea is that looks like current distributed NFTs
 // but each parts can be replaced.
 
-module garage_token::portrait {
+module flex_token::portrait {
     use std::error;
     use std::signer;
     use std::string::{String, utf8};
