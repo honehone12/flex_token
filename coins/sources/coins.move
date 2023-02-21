@@ -1,6 +1,10 @@
 // now only module owner can mint,
 // need to publish to resource account
 
+// i currently use address as arg for playing with cli
+// but this might not be good practice
+// consider again after switch to client SDK
+
 module flex_token::coins {
     use std::signer;
     use std::error;
@@ -16,6 +20,7 @@ module flex_token::coins {
     const E_INVALID_DESIGN: u64 = 3;
     const E_NOT_OWNER: u64 = 4; 
     const E_TOO_LONG_INPUT: u64 = 5;
+    const E_INVALID_OBJECT_ADDRESS: u64 = 6;
 
     const MAX_NMAE: u64 = 64;
     const MAX_DESC: u64 = 128;
@@ -48,8 +53,8 @@ module flex_token::coins {
         //  -coin
         //  -design
 
-        let coin_collection_name = utf8(b"garage-coin");
-        let design_collection_name = utf8(b"garage-coin-design-collection");
+        let coin_collection_name = utf8(b"flex-coin");
+        let design_collection_name = utf8(b"flex-coin-design-collection");
         _ = collection::create_fixed_collection(
             caller,
             utf8(b"user-customizable-coin"),
@@ -80,6 +85,94 @@ module flex_token::coins {
                 )
             }
         );
+    }
+
+    inline fun verify_coin(obj_addr: address): Object<Coin> {
+        assert!(
+            exists<Coin>(obj_addr),
+            error::not_found(E_INVALID_OBJECT_ADDRESS)
+        );
+        object::address_to_object<Coin>(obj_addr)
+    }
+
+    inline fun verify_design(obj_addr: address): Object<Design> {
+        assert!(
+            exists<Design>(obj_addr),
+            error::not_found(E_INVALID_OBJECT_ADDRESS)
+        );
+        object::address_to_object<Design>(obj_addr)
+    }
+
+    #[view]
+    public fun coin_creator(object_address: address): address {
+        let obj = verify_coin(object_address);
+        token::creator(obj)
+    }
+
+    #[view]
+    public fun design_creator(object_address: address): address {
+        let obj = verify_design(object_address);
+        token::creator(obj)
+    }
+
+    #[view]
+    public fun coin_collection(object_address: address): String {
+        let obj = verify_coin(object_address);
+        token::collection(obj)
+    }
+
+    #[view]
+    public fun design_collection(object_address: address): String {
+        let obj = verify_design(object_address);
+        token::collection(obj)
+    }
+
+    #[view]
+    public fun coin_creation_name(object_address: address): String {
+        let obj = verify_coin(object_address);
+        token::creation_name(obj)
+    }
+
+    #[view]
+    public fun design_creation_name(object_address: address): String {
+        let obj = verify_design(object_address);
+        token::creation_name(obj)
+    }
+
+    #[view]
+    public fun coin_description(object_address: address): String {
+        let obj = verify_coin(object_address);
+        token::description(obj)
+    }
+
+    #[view]
+    public fun design_description(object_address: address): String {
+        let obj = verify_design(object_address);
+        token::description(obj)
+    }
+
+    #[view]
+    public fun coin_name(object_address: address): String {
+        let obj = verify_coin(object_address);
+        token::name(obj)
+    }
+
+    #[view]
+    public fun design_name(object_address: address): String {
+        let obj = verify_design(object_address);
+        token::name(obj)
+    }
+
+    #[view]
+    public fun coin_uri(object_address: address): String {
+        let obj = verify_coin(object_address);
+        token::uri(obj)
+    }
+
+    #[view]
+    public fun design_uri(object_address: address): String {
+        let obj = verify_design(object_address);
+        token::uri(obj)
     }
 
     public entry fun mint_coin(
@@ -347,7 +440,7 @@ module flex_token::coins {
         let addr = signer::address_of(account);
         let coin_addr = token::create_token_address(
             &addr,
-            &utf8(b"garage-coin"),
+            &utf8(b"flex-coin"),
             &utf8(b"coin-00")
         );
         let coin_obj = object::address_to_object<Coin>(coin_addr);
@@ -368,7 +461,7 @@ module flex_token::coins {
         );
         let design_addr = token::create_token_address(
             &addr,
-            &utf8(b"garage-coin-design-collection"),
+            &utf8(b"flex-coin-design-collection"),
             &utf8(b"design-00")
         );
         let design_obj = object::address_to_object<Design>(design_addr);

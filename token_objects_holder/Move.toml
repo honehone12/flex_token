@@ -7,4 +7,5 @@ AptosFramework = { local = "../../../aptos-core/aptos-move/framework/aptos-frame
 TokenObjects = { local = "../framework" }
 
 [addresses]
-flex_token = "0xcafe"
+#flex_token = "0xcafe"
+flex_token = "_"

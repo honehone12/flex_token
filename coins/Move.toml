@@ -3,7 +3,8 @@ name = 'Coins'
 version = '1.0.0'
 
 [addresses]
-flex_token = "0xcafe"
+#flex_token = "0xcafe"
+flex_token = "_"
 
 [dependencies]
 AptosFramework = { local = "../../../aptos-core/aptos-move/framework/aptos-framework" }
