@@ -4,10 +4,10 @@
 
 // currently everyone can mint design
 // only admin can mint coin
-// fees will can added later, but need client SDK
+// fees can added later, but need client SDK
 
-// design is restricted to transfer
-// design can be transfered only when composed
+// design is restricted to transfer and can be transfered only when composed
+// coin is sttill transferable with 3rd party
 
 // future:
 // supply info
@@ -24,7 +24,7 @@ module flex_token::coins {
     use aptos_framework::account::SignerCapability;
     use token_objects::collection::{Self, Collection};
     use token_objects::token::{Self, MutabilityConfig};
-    use flex_token::token_objects_holder;
+    use token_objects_holder::token_objects_holder;
 
     const E_NO_SUCH_COINS: u64 = 1;
     const E_NO_SUCH_DESIGN: u64 = 2;
@@ -34,7 +34,7 @@ module flex_token::coins {
     const E_INVALID_OBJECT_ADDRESS: u64 = 6;
     const E_NOT_ADMIN: u64 = 7;
 
-    const MAX_NMAE: u64 = 64;
+    const MAX_NAME: u64 = 64;
     const MAX_DESC: u64 = 128;
     const MAX_URL: u64 = 128;
 
@@ -124,6 +124,22 @@ module flex_token::coins {
             error::not_found(E_INVALID_OBJECT_ADDRESS)
         );
         object::address_to_object<Design>(obj_addr)
+    }
+
+    // anyone can view
+    #[view]
+    public fun coin_design(object_address: address): Option<address>
+    acquires Coin {
+        let obj = verify_coin_address(object_address);
+        let coin = borrow_global<Coin>(object::object_address(&obj));
+        let addr = if (option::is_some(&coin.design)) {
+            option::some(
+                object::object_address(option::borrow(&coin.design))
+            )
+        } else {
+            option::none()
+        };
+        addr
     }
 
     #[view]
@@ -279,7 +295,7 @@ module flex_token::coins {
         
         assert!(
             string::length(description) <= MAX_DESC &&
-            string::length(name) <= MAX_NMAE &&
+            string::length(name) <= MAX_NAME &&
             string::length(uri) <= MAX_URL,
             error::invalid_argument(E_TOO_LONG_INPUT)
         );
@@ -336,7 +352,7 @@ module flex_token::coins {
     acquires CoinsOnChainConfig {
         assert!(
             string::length(description) <= MAX_DESC &&
-            string::length(name) <= MAX_NMAE &&
+            string::length(name) <= MAX_NAME &&
             string::length(uri) <= MAX_URL,
             error::invalid_argument(E_TOO_LONG_INPUT)
         );
@@ -554,8 +570,41 @@ module flex_token::coins {
         resource = @flex_token,
         other = @234
     )]
+    #[expected_failure]
+    fun test_transfer_design_after_decomposed(
+        account: &signer, 
+        resource: &signer, 
+        other: &signer
+    )
+    acquires CoinsOnChainConfig, Coin, Design {
+        setup_test(account, resource);
+        
+        let coin_obj = create_coin(
+            account,
+            &utf8(b"user-customizable-coin-00"),
+            &utf8(b"coin-00"),
+            &utf8(b"coin-00-url"),
+            
+        );
+        let design_obj = create_design(
+            account,
+            &utf8(b"coin-design-00"),
+            &utf8(b"design-00"),
+            &utf8(b"happy-birthdday"),
+            &utf8(b"design-00-url")    
+        );
+        compose_coin(account, coin_obj, design_obj);
+        decompose_coin(account, coin_obj, design_obj);
+        object::transfer(account, design_obj, signer::address_of(other));
+    }
+
+    #[test(
+        account = @admin,
+        resource = @flex_token,
+        other = @234
+    )]
     fun test_getter(account: &signer, resource: &signer, other: &signer)
-    acquires CoinsOnChainConfig, Design {
+    acquires CoinsOnChainConfig, Coin, Design {
         setup_test(account, resource);
 
         let coin_obj = create_coin(
@@ -597,7 +646,23 @@ module flex_token::coins {
         assert!(
             design_collection_info() ==
             utf8(b"design-collection-for-user-customizable-coin,flex-coin-design-collection,design-collection-url"),
-            6
+            7
+        );
+
+        let design_obj = create_design(
+            account,
+            &utf8(b"coin-design-01"),
+            &utf8(b"design-01"),
+            &utf8(b"happy-graduation"),
+            &utf8(b"design-01-url")    
+        );
+        compose_coin(account, coin_obj, design_obj);
+        assert!(
+            option::contains(
+                &coin_design(coin_addr), 
+                &object::object_address(&design_obj)
+            ),
+            8
         );
     }
 

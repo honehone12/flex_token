@@ -4,8 +4,7 @@ version = '1.0.0'
 
 [dependencies]
 AptosFramework = { local = "../../../aptos-core/aptos-move/framework/aptos-framework" }
-TokenObjects = { local = "../framework" }
 
 [addresses]
-flex_token = "0xc3bb8488ab1a5815a9d543d7e41b0e0df46a7396f89b22821f07a4362f75ddc5"
-#flex_token = "_"
+#token_objects_holder = "0xcafe"
+token_objects_holder = "_"

@@ -1,4 +1,4 @@
-module flex_token::token_objects_holder {
+module token_objects_holder::token_objects_holder {
     use std::error;
     use std::signer;
     use std::vector;
