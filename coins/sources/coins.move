@@ -1,9 +1,11 @@
-// now only module owner can mint,
-// need to publish to resource account
-
-// i currently use address as arg for playing with cli
+// currently address is used as arg for playing with cli
 // but this might not be good practice
 // consider again after switch to client SDK
+
+// currently everyone can mint design
+// fees will be added later
+// only admin can mint coin
+// design is not transferable
 
 module flex_token::coins {
     use std::signer;
@@ -11,7 +13,9 @@ module flex_token::coins {
     use std::option::{Self, Option};
     use std::string::{Self, String, utf8};
     use aptos_framework::object::{Self, Object};
-    use token_objects::collection;
+    use aptos_framework::resource_account;
+    use aptos_framework::account::SignerCapability;
+    use token_objects::collection::{Self, Collection};
     use token_objects::token::{Self, MutabilityConfig};
     use flex_token::token_objects_holder;
 
@@ -21,16 +25,20 @@ module flex_token::coins {
     const E_NOT_OWNER: u64 = 4; 
     const E_TOO_LONG_INPUT: u64 = 5;
     const E_INVALID_OBJECT_ADDRESS: u64 = 6;
+    const E_NOT_ADMIN: u64 = 7;
 
     const MAX_NMAE: u64 = 64;
     const MAX_DESC: u64 = 128;
     const MAX_URL: u64 = 128;
 
     struct CoinsOnChainConfig has key {
+        signer_capability: SignerCapability,
         coin_collection_name: String,
         coin_mutability_config: MutabilityConfig,
+        coin_collection_object: Object<Collection>,
         design_collection_name: String,
-        design_mutability_config: MutabilityConfig 
+        design_mutability_config: MutabilityConfig,
+        design_collection_object: Object<Collection> 
     }
 
     #[resource_group_member(
@@ -47,16 +55,16 @@ module flex_token::coins {
         attribute: String
     }
 
-    fun init_module(caller: &signer) {
-        //want object root ??
-        // -root
-        //  -coin
-        //  -design
+    fun init_module(resource_signer: &signer) {
+        let signer_capability = resource_account::retrieve_resource_account_cap(
+            resource_signer,
+            @admin
+        );
 
         let coin_collection_name = utf8(b"flex-coin");
         let design_collection_name = utf8(b"flex-coin-design-collection");
-        _ = collection::create_fixed_collection(
-            caller,
+        let coin_collection_cctor = collection::create_fixed_collection(
+            resource_signer,
             utf8(b"user-customizable-coin"),
             1000_000,
             collection::create_mutability_config(false, false),
@@ -64,8 +72,8 @@ module flex_token::coins {
             option::none(),
             utf8(b"coin-collection-url")
         );
-        _ = collection::create_aggregable_collection(
-            caller,
+        let design_collection_cctor = collection::create_aggregable_collection(
+            resource_signer,
             utf8(b"design-collection-for-user-customizable-coin"),
             collection::create_mutability_config(false, false),
             design_collection_name,
@@ -73,21 +81,28 @@ module flex_token::coins {
             utf8(b"design-collection-url")
         );
         move_to(
-            caller, 
+            resource_signer, 
             CoinsOnChainConfig {
+                signer_capability,
                 coin_collection_name,
                 coin_mutability_config: token::create_mutability_config(
                     false, false, false
                 ),
+                coin_collection_object: object::object_from_constructor_ref<Collection>(
+                    &coin_collection_cctor
+                ), 
                 design_collection_name,
                 design_mutability_config: token::create_mutability_config(
                     false, false, false
+                ),
+                design_collection_object: object::object_from_constructor_ref<Collection>(
+                    &design_collection_cctor
                 )
             }
         );
     }
 
-    inline fun verify_coin(obj_addr: address): Object<Coin> {
+    inline fun verify_coin_address(obj_addr: address): Object<Coin> {
         assert!(
             exists<Coin>(obj_addr),
             error::not_found(E_INVALID_OBJECT_ADDRESS)
@@ -95,7 +110,7 @@ module flex_token::coins {
         object::address_to_object<Coin>(obj_addr)
     }
 
-    inline fun verify_design(obj_addr: address): Object<Design> {
+    inline fun verify_design_address(obj_addr: address): Object<Design> {
         assert!(
             exists<Design>(obj_addr),
             error::not_found(E_INVALID_OBJECT_ADDRESS)
@@ -105,74 +120,106 @@ module flex_token::coins {
 
     #[view]
     public fun coin_creator(object_address: address): address {
-        let obj = verify_coin(object_address);
+        let obj = verify_coin_address(object_address);
         token::creator(obj)
+    }
+
+    #[view]
+    public fun coin_info(object_address: address): String {
+        let obj = verify_coin_address(object_address);
+        let info = token::collection(obj);
+        let separator = utf8(b",");
+        string::append(&mut info, separator);
+        string::append(&mut info, token::description(obj));
+        string::append(&mut info, separator);
+        string::append(&mut info, token::name(obj));
+        string::append(&mut info, separator);
+        string::append(&mut info, token::uri(obj));
+        info
     }
 
     #[view]
     public fun design_creator(object_address: address): address {
-        let obj = verify_design(object_address);
+        let obj = verify_design_address(object_address);
         token::creator(obj)
     }
 
     #[view]
-    public fun coin_collection(object_address: address): String {
-        let obj = verify_coin(object_address);
-        token::collection(obj)
+    public fun design_info(object_address: address): String
+    acquires Design {
+        let obj = verify_design_address(object_address);
+        let design = borrow_global<Design>(object_address);
+        let info = token::collection(obj);
+        let separator = utf8(b",");
+        string::append(&mut info, separator);
+        string::append(&mut info, token::description(obj));
+        string::append(&mut info, separator);
+        string::append(&mut info, token::name(obj));
+        string::append(&mut info, separator);
+        string::append(&mut info, design.attribute);
+        string::append(&mut info, separator);
+        string::append(&mut info, token::uri(obj));
+        info
     }
 
     #[view]
-    public fun design_collection(object_address: address): String {
-        let obj = verify_design(object_address);
-        token::collection(obj)
+    public fun coin_collection_creator(): address
+    acquires CoinsOnChainConfig {
+        let on_chain_config = borrow_global<CoinsOnChainConfig>(
+            @flex_token
+        );
+        collection::creator(on_chain_config.coin_collection_object)
     }
 
     #[view]
-    public fun coin_creation_name(object_address: address): String {
-        let obj = verify_coin(object_address);
-        token::creation_name(obj)
+    public fun coin_collection_info(): String
+    acquires CoinsOnChainConfig {
+        let on_chain_config = borrow_global<CoinsOnChainConfig>(
+            @flex_token
+        );
+        let info = collection::description(on_chain_config.coin_collection_object);
+        let separator = utf8(b",");
+        string::append(&mut info, separator);
+        string::append(
+            &mut info,
+            collection::name(on_chain_config.coin_collection_object) 
+        );
+        string::append(&mut info, separator);
+        string::append(
+            &mut info,
+            collection::uri(on_chain_config.coin_collection_object)
+        );
+        info
     }
 
     #[view]
-    public fun design_creation_name(object_address: address): String {
-        let obj = verify_design(object_address);
-        token::creation_name(obj)
+    public fun design_collection_creator(): address
+    acquires CoinsOnChainConfig {
+        let on_chain_config = borrow_global<CoinsOnChainConfig>(
+            @flex_token
+        );
+        collection::creator(on_chain_config.design_collection_object)
     }
 
     #[view]
-    public fun coin_description(object_address: address): String {
-        let obj = verify_coin(object_address);
-        token::description(obj)
-    }
-
-    #[view]
-    public fun design_description(object_address: address): String {
-        let obj = verify_design(object_address);
-        token::description(obj)
-    }
-
-    #[view]
-    public fun coin_name(object_address: address): String {
-        let obj = verify_coin(object_address);
-        token::name(obj)
-    }
-
-    #[view]
-    public fun design_name(object_address: address): String {
-        let obj = verify_design(object_address);
-        token::name(obj)
-    }
-
-    #[view]
-    public fun coin_uri(object_address: address): String {
-        let obj = verify_coin(object_address);
-        token::uri(obj)
-    }
-
-    #[view]
-    public fun design_uri(object_address: address): String {
-        let obj = verify_design(object_address);
-        token::uri(obj)
+    public fun design_collection_info(): String
+    acquires CoinsOnChainConfig {
+        let on_chain_config = borrow_global<CoinsOnChainConfig>(
+            @flex_token
+        );
+        let info = collection::description(on_chain_config.design_collection_object);
+        let separator = utf8(b",");
+        string::append(&mut info, separator);
+        string::append(
+            &mut info,
+            collection::name(on_chain_config.design_collection_object) 
+        );
+        string::append(&mut info, separator);
+        string::append(
+            &mut info,
+            collection::uri(on_chain_config.design_collection_object)
+        );
+        info
     }
 
     public entry fun mint_coin(
@@ -197,6 +244,12 @@ module flex_token::coins {
         uri: &String
     ): Object<Coin>
     acquires CoinsOnChainConfig {
+        let creator_addr = signer::address_of(creator); 
+        assert!(
+            creator_addr == @admin,
+            error::permission_denied(E_NOT_ADMIN)
+        );
+        
         assert!(
             string::length(description) <= MAX_DESC &&
             string::length(name) <= MAX_NMAE &&
@@ -204,9 +257,8 @@ module flex_token::coins {
             error::invalid_argument(E_TOO_LONG_INPUT)
         );
 
-        let creator_addr = signer::address_of(creator); 
         let on_chain_config = borrow_global<CoinsOnChainConfig>(
-            creator_addr
+            @flex_token
         );
         let creator_ref = token::create_token(
             creator,
@@ -225,7 +277,7 @@ module flex_token::coins {
             }
         );
         let obj = object::address_to_object(signer::address_of(&token_signer));
-        token_objects_holder::register<Coin>(creator);
+        register_all(creator);
         token_objects_holder::add_to_holder(creator_addr, obj);
         obj
     }
@@ -264,7 +316,7 @@ module flex_token::coins {
         
         let creator_addr = signer::address_of(creator);
         let on_chain_config = borrow_global<CoinsOnChainConfig>(
-            creator_addr
+            @flex_token
         );
         let creator_ref = token::create_token(
             creator,
@@ -283,12 +335,16 @@ module flex_token::coins {
             }
         );
         let obj = object::address_to_object(signer::address_of(&token_signer));
-        token_objects_holder::register<Design>(creator);
+        register_all(creator);
         token_objects_holder::add_to_holder(creator_addr, obj);
         obj
     }
 
     public entry fun register(account: &signer) {
+        register_all(account);
+    }
+
+    inline fun register_all(account: &signer) {
         token_objects_holder::register<Coin>(account);
         token_objects_holder::register<Design>(account);
     }
@@ -423,13 +479,83 @@ module flex_token::coins {
         token_objects_holder::add_to_holder(owner_addr, design_obj);
     }
 
+    #[test_only]
+    use std::vector;
+    #[test_only]
+    use aptos_framework::account;
+
+    #[test_only]
+    fun setup_test(caller: &signer, resource_signer: &signer) {
+        account::create_account_for_test(signer::address_of(caller));
+        resource_account::create_resource_account(
+            caller,
+            vector::empty<u8>(),
+            vector::empty<u8>()
+        );
+        init_module(resource_signer);
+    }
+
     #[test(
-        account = @123,
+        account = @admin,
+        resource = @flex_token,
+        other = @234
+    )]
+    fun test_getter(account: &signer, resource: &signer, other: &signer)
+    acquires CoinsOnChainConfig, Design {
+        setup_test(account, resource);
+
+        let coin_obj = create_coin(
+            account,
+            &utf8(b"user-customizable-coin-00"),
+            &utf8(b"coin-00"),
+            &utf8(b"coin-00-url"),
+            
+        );
+        let design_obj = create_design(
+            other,
+            &utf8(b"coin-design-00"),
+            &utf8(b"design-00"),
+            &utf8(b"happy-birthdday"),
+            &utf8(b"design-00-url")    
+        );
+        let coin_addr = object::object_address(&coin_obj);
+        let design_addr = object::object_address(&design_obj);
+
+        assert!(coin_creator(coin_addr) == @admin, 0);
+        assert!(design_creator(design_addr) == @234, 1);
+        assert!(
+            coin_info(coin_addr) == 
+            utf8(b"flex-coin,user-customizable-coin-00,coin-00,coin-00-url"), 
+            2
+        );
+        assert!(
+            design_info(design_addr) == 
+            utf8(b"flex-coin-design-collection,coin-design-00,design-00,happy-birthdday,design-00-url"), 
+            3
+        );
+        assert!(coin_collection_creator() == @flex_token, 4);
+        assert!(design_collection_creator() == @flex_token, 5);
+        assert!(
+            coin_collection_info() ==
+            utf8(b"user-customizable-coin,flex-coin,coin-collection-url"),
+            6
+        );
+        assert!(
+            design_collection_info() ==
+            utf8(b"design-collection-for-user-customizable-coin,flex-coin-design-collection,design-collection-url"),
+            6
+        );
+    }
+
+    #[test(
+        account = @admin,
+        resource = @flex_token,
         receiver = @234
     )]
-    fun test_entry(account: &signer, receiver: &signer)
+    fun test_entry(account: &signer, resource: &signer, receiver: &signer)
     acquires CoinsOnChainConfig, Coin {
-        init_module(account);
+        setup_test(account, resource);
+
         mint_coin(
             account,
             utf8(b"user-customizable-coin-00"),
@@ -481,10 +607,10 @@ module flex_token::coins {
         assert!(token_objects_holder::holds(receiver_addr, design_obj), 11);
     }
 
-    #[test(account = @123)]
-    fun test_coin_compose_decompose(account: &signer)
+    #[test(account = @admin, resource = @flex_token)]
+    fun test_coin_compose_decompose(account: &signer, resource: &signer)
     acquires CoinsOnChainConfig, Coin {
-        init_module(account);
+        setup_test(account, resource);
 
         let coin = create_coin(
             account,
@@ -536,12 +662,13 @@ module flex_token::coins {
     }
 
     #[test(
-        account = @123, 
+        account = @admin, 
+        resource = @flex_token,
         other = @0x234
     )]
-    fun test_transfer(account: &signer, other: &signer)
+    fun test_transfer(account: &signer, resource: &signer, other: &signer)
     acquires CoinsOnChainConfig, Coin {
-        init_module(account);
+        setup_test(account, resource);
 
         let coin = create_coin(
             account,
@@ -563,12 +690,12 @@ module flex_token::coins {
         assert!(object::is_owner(design, object::object_address(&coin)), 1);
     }
 
-    #[test(account = @0x123)]
+    #[test(account = @admin, resource = @flex_token)]
     #[expected_failure]
-    fun test_compose_not_exist_design(account: &signer)
+    fun test_compose_not_exist_design(account: &signer, resource: &signer)
     acquires CoinsOnChainConfig, Coin {
-        init_module(account);
-        
+        setup_test(account, resource);
+
         let coin = create_coin(
             account,
             &utf8(b"user-customizable-coin-00"),
@@ -580,16 +707,21 @@ module flex_token::coins {
     }
 
     #[test(
-        account = @0x123,
+        account = @admin,
+        resource = @flex_token,
         other = @0x234
     )]
     #[expected_failure(
         abort_code = 0x50004,
         location = Self
     )]
-    fun test_compose_not_owner_coin(account: &signer, other: &signer)
+    fun test_compose_not_owner_coin(
+        account: &signer, 
+        resource: &signer, 
+        other: &signer
+    )
     acquires CoinsOnChainConfig, Coin {
-        init_module(account);
+        setup_test(account, resource);
         
         let coin = create_coin(
             account,
@@ -609,16 +741,21 @@ module flex_token::coins {
     }
 
     #[test(
-        account = @0x123,
+        account = @admin,
+        resource = @flex_token,
         other = @0x234
     )]
     #[expected_failure(
         abort_code = 0x50004,
         location = Self
     )]
-    fun test_compose_not_owner_design(account: &signer, other: &signer)
+    fun test_compose_not_owner_design(
+        account: &signer, 
+        resource: &signer,
+        other: &signer
+    )
     acquires CoinsOnChainConfig, Coin {
-        init_module(account);
+        setup_test(account, resource);
         
         let coin = create_coin(
             account,
@@ -638,16 +775,21 @@ module flex_token::coins {
     }
 
     #[test(
-        account = @0x123,
+        account = @admin,
+        resource = @flex_token,
         other = @0x234
     )]
     #[expected_failure(
         abort_code = 0x50004,
         location = Self
     )]
-    fun test_decompose_not_owner_coin(account: &signer, other: &signer)
+    fun test_decompose_not_owner_coin(
+        account: &signer,
+        resource: &signer, 
+        other: &signer
+    )
     acquires CoinsOnChainConfig, Coin {
-        init_module(account);
+        setup_test(account, resource);
         
         let coin = create_coin(
             account,
@@ -667,14 +809,14 @@ module flex_token::coins {
         decompose_coin(account, coin, design);
     }
 
-    #[test(account = @0x123)]
+    #[test(account = @admin, resource = @flex_token)]
     #[expected_failure(
         abort_code = 0x10003,
         location = Self
     )]
-    fun test_decompose_invalid_design(account: &signer)
+    fun test_decompose_invalid_design(account: &signer, resource: &signer)
     acquires CoinsOnChainConfig, Coin {
-        init_module(account);
+        setup_test(account, resource);
         
         let coin = create_coin(
             account,
@@ -701,13 +843,19 @@ module flex_token::coins {
     }
 
     #[test(
-        account = @0x123,
+        account = @admin,
+        resource = @flex_token,
         fake = @234    
     )]
     #[expected_failure]
-    fun test_invalid_caller_coin(account: &signer, fake: &signer)
+    fun test_invalid_caller_coin(
+        account: &signer, 
+        resource: &signer,
+        fake: &signer
+    )
     acquires CoinsOnChainConfig {
-        init_module(account);
+        setup_test(account, resource);
+        
         let _coin = create_coin(
             fake,
             &utf8(b"user-customizable-coin-00"),
@@ -724,13 +872,17 @@ module flex_token::coins {
     }
 
     #[test(
-        account = @0x123,
+        account = @admin,
+        resource = @flex_token,
         fake = @234    
     )]
-    #[expected_failure]
-    fun test_invalid_caller_design(account: &signer, fake: &signer)
+    fun test_any_caller_design(
+        account: &signer, 
+        resource: &signer,
+        fake: &signer)
     acquires CoinsOnChainConfig {
-        init_module(account);
+        setup_test(account, resource);
+        
         let _design = create_design(
             fake,
             &utf8(b"coin-design-00"),
@@ -741,13 +893,19 @@ module flex_token::coins {
     }
 
     #[test(
-        account = @0x123,
+        account = @admin,
+        resource = @flex_token,
         fake = @234    
     )]
     #[expected_failure]
-    fun test_invalid_caller_compose(account: &signer, fake: &signer)
+    fun test_invalid_caller_compose(
+        account: &signer, 
+        resource: &signer,
+        fake: &signer
+    )
     acquires CoinsOnChainConfig, Coin {
-        init_module(account);
+        setup_test(account, resource);
+        
         let coin = create_coin(
             fake,
             &utf8(b"user-customizable-coin-00"),
@@ -765,13 +923,18 @@ module flex_token::coins {
     }
 
     #[test(
-        account = @0x123,
+        account = @admin,
+        resource = @flex_token,
         fake = @234    
     )]
     #[expected_failure]
-    fun test_invalid_caller_decompose(account: &signer, fake: &signer)
+    fun test_invalid_caller_decompose(
+        account: &signer, 
+        resource: &signer,
+        fake: &signer)
     acquires CoinsOnChainConfig, Coin {
-        init_module(account);
+        setup_test(account, resource);
+
         let coin = create_coin(
             fake,
             &utf8(b"user-customizable-coin-00"),
@@ -789,11 +952,11 @@ module flex_token::coins {
         decompose_coin(fake, coin, design);
     }
 
-    #[test(account = @0x123)]
+    #[test(account = @admin, resource = @flex_token)]
     #[expected_failure]
-    fun test_create_twice_coin(account: &signer)
+    fun test_create_twice_coin(account: &signer, resource: &signer)
     acquires CoinsOnChainConfig {
-        init_module(account);
+        setup_test(account, resource);
         
         let _coin = create_coin(
             account,
@@ -810,11 +973,12 @@ module flex_token::coins {
 
     }
 
-    #[test(account = @0x123)]
+    #[test(account = @admin, resource = @flex_token)]
     #[expected_failure]
-    fun test_create_twice_design(account: &signer)
+    fun test_create_twice_design(account: &signer, resource: &signer)
     acquires CoinsOnChainConfig {
-        init_module(account);
+        setup_test(account, resource);
+        
         let _design = create_design(
             account,
             &utf8(b"coin-design-00"),
@@ -831,11 +995,11 @@ module flex_token::coins {
         );
     }
 
-    #[test(account = @0x123)]
+    #[test(account = @admin, resource = @flex_token)]
     #[expected_failure]
-    fun test_compose_twice(account: &signer)
+    fun test_compose_twice(account: &signer, resource: &signer)
     acquires CoinsOnChainConfig, Coin {
-        init_module(account);
+        setup_test(account, resource);
         
         let coin = create_coin(
             account,
@@ -854,11 +1018,11 @@ module flex_token::coins {
         compose_coin(account, coin, design);
     }
 
-    #[test(account = @0x123)]
+    #[test(account = @admin, resource = @flex_token)]
     #[expected_failure]
-    fun test_decompose_twice(account: &signer)
+    fun test_decompose_twice(account: &signer, resource: &signer)
     acquires CoinsOnChainConfig, Coin {
-        init_module(account);
+        setup_test(account, resource);
         
         let coin = create_coin(
             account,
