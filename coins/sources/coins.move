@@ -3,9 +3,12 @@
 // consider again after switch to client SDK
 
 // currently everyone can mint design
-// fees will be added later
 // only admin can mint coin
-// design is not transferable
+// fees will can added later, but need client SDK
+
+// we might want restrict transfering objects in this small combinations
+// in this case, we want transfer only coins
+// means object model might be nice for more complex combinations
 
 module flex_token::coins {
     use std::signer;
@@ -349,16 +352,16 @@ module flex_token::coins {
         token_objects_holder::register<Design>(account);
     }
 
-    public entry fun transfer(
+    public entry fun transfer_coin(
         owner: &signer,
         coin_address: address,
         receiver: address 
     ) {
         let coin_obj = object::address_to_object<Coin>(coin_address);
-        transfer_coin(owner, coin_obj, receiver);
+        managed_transfer_coin(owner, coin_obj, receiver);
     }
 
-    fun transfer_coin(
+    fun managed_transfer_coin(
         owner: &signer,
         coin_obj: Object<Coin>,
         receiver: address
@@ -380,6 +383,39 @@ module flex_token::coins {
         object::transfer(owner, coin_obj, receiver);
         token_objects_holder::remove_from_holder(owner, coin_obj);
         token_objects_holder::add_to_holder(receiver, coin_obj);
+    }
+
+    public entry fun transfer_design(
+        owner: &signer,
+        design_address: address,
+        receiver: address 
+    ) {
+        let design_obj = object::address_to_object<Design>(design_address);
+        managed_transfer_design(owner, design_obj, receiver);
+    }
+
+    fun managed_transfer_design(
+        owner: &signer,
+        design_obj: Object<Design>,
+        receiver: address
+    ) {
+        let owner_addr = signer::address_of(owner);
+        assert!(
+            exists<Design>(object::object_address(&design_obj)),
+            error::not_found(E_NO_SUCH_DESIGN)
+        );
+        assert!(
+            object::is_owner(design_obj, owner_addr),
+            error::permission_denied(E_NOT_OWNER)
+        );
+        assert!(
+            token_objects_holder::holds(owner_addr, design_obj),
+            error::permission_denied(E_NOT_OWNER)
+        );
+
+        object::transfer(owner, design_obj, receiver);
+        token_objects_holder::remove_from_holder(owner, design_obj);
+        token_objects_holder::add_to_holder(receiver, design_obj);
     }
 
     public entry fun compose(
@@ -574,7 +610,7 @@ module flex_token::coins {
         assert!(token_objects_holder::holds(addr, coin_obj), 1);
         register(receiver);
         let receiver_addr = signer::address_of(receiver);
-        transfer(account, coin_addr, receiver_addr);
+        transfer_coin(account, coin_addr, receiver_addr);
         assert!(object::is_owner(coin_obj, receiver_addr), 2);
         assert!(token_objects_holder::holds(receiver_addr, coin_obj), 3);
     
@@ -594,17 +630,21 @@ module flex_token::coins {
         assert!(object::is_owner(design_obj, addr), 4);
         assert!(token_objects_holder::holds(addr, design_obj), 5);
 
-        transfer(receiver, coin_addr, addr);
+        transfer_coin(receiver, coin_addr, addr);
         compose(account, coin_addr, design_addr);
         assert!(object::is_owner(design_obj, coin_addr), 6);
         assert!(!token_objects_holder::holds(addr, design_obj), 7);
         
-        transfer(account, coin_addr, receiver_addr);
+        transfer_coin(account, coin_addr, receiver_addr);
         assert!(object::is_owner(design_obj, coin_addr), 8);
         assert!(!token_objects_holder::holds(receiver_addr, design_obj), 9);
         decompose(receiver, coin_addr, design_addr);
         assert!(object::is_owner(design_obj, receiver_addr), 10);
         assert!(token_objects_holder::holds(receiver_addr, design_obj), 11);
+        transfer_design(receiver, design_addr, addr);
+        assert!(object::is_owner(design_obj, addr), 12);
+        assert!(token_objects_holder::holds(addr, design_obj), 13);
+            
     }
 
     #[test(account = @admin, resource = @flex_token)]
@@ -666,7 +706,7 @@ module flex_token::coins {
         resource = @flex_token,
         other = @0x234
     )]
-    fun test_transfer(account: &signer, resource: &signer, other: &signer)
+    fun test_raw_transfer(account: &signer, resource: &signer, other: &signer)
     acquires CoinsOnChainConfig, Coin {
         setup_test(account, resource);
 
