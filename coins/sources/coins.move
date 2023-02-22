@@ -6,16 +6,20 @@
 // only admin can mint coin
 // fees will can added later, but need client SDK
 
-// we might want restrict transfering objects in this small combinations
-// in this case, we want transfer only coins
-// means object model might be nice for more complex combinations
+// design is restricted to transfer
+// design can be transfered only when composed
+
+// future:
+// supply info
+// royality info
+// mutator
 
 module flex_token::coins {
     use std::signer;
     use std::error;
     use std::option::{Self, Option};
     use std::string::{Self, String, utf8};
-    use aptos_framework::object::{Self, Object};
+    use aptos_framework::object::{Self, Object, TransferRef};
     use aptos_framework::resource_account;
     use aptos_framework::account::SignerCapability;
     use token_objects::collection::{Self, Collection};
@@ -55,7 +59,8 @@ module flex_token::coins {
         group = object::ObjectGroup
     )]
     struct Design has key {
-        attribute: String
+        attribute: String,
+        transfer_config: TransferRef
     }
 
     fun init_module(resource_signer: &signer) {
@@ -225,6 +230,25 @@ module flex_token::coins {
         info
     }
 
+    public entry fun register(account: &signer) {
+        register_all(account);
+    }
+
+    inline fun register_all(account: &signer) {
+        token_objects_holder::register<Coin>(account);
+        token_objects_holder::register<Design>(account);
+    }
+
+    // this should be called after 3rd party transfer
+    public entry fun update_resource(account: &signer) {
+        manual_update(account);
+    }
+
+    inline fun manual_update(account: &signer) {
+        token_objects_holder::update<Coin>(account);
+        token_objects_holder::update<Design>(account);
+    }
+
     public entry fun mint_coin(
         creator: &signer,
         description: String,
@@ -263,7 +287,7 @@ module flex_token::coins {
         let on_chain_config = borrow_global<CoinsOnChainConfig>(
             @flex_token
         );
-        let creator_ref = token::create_token(
+        let cctor_ref = token::create_token(
             creator,
             on_chain_config.coin_collection_name,
             *description,
@@ -272,7 +296,7 @@ module flex_token::coins {
             option::none(),
             *uri
         );
-        let token_signer = object::generate_signer(&creator_ref);
+        let token_signer = object::generate_signer(&cctor_ref);
         move_to(
             &token_signer, 
             Coin{
@@ -321,7 +345,7 @@ module flex_token::coins {
         let on_chain_config = borrow_global<CoinsOnChainConfig>(
             @flex_token
         );
-        let creator_ref = token::create_token(
+        let cctor_ref = token::create_token(
             creator,
             on_chain_config.design_collection_name,
             *description,
@@ -330,26 +354,21 @@ module flex_token::coins {
             option::none(),
             *uri
         );
-        let token_signer = object::generate_signer(&creator_ref);
+        let transfer_ref = object::generate_transfer_ref(&cctor_ref);
+        object::disable_ungated_transfer(&transfer_ref);
+
+        let token_signer = object::generate_signer(&cctor_ref);
         move_to(
             &token_signer,
             Design{
-                attribute: *design_attribute
+                attribute: *design_attribute,
+                transfer_config: transfer_ref
             }
         );
         let obj = object::address_to_object(signer::address_of(&token_signer));
         register_all(creator);
         token_objects_holder::add_to_holder(creator_addr, obj);
         obj
-    }
-
-    public entry fun register(account: &signer) {
-        register_all(account);
-    }
-
-    inline fun register_all(account: &signer) {
-        token_objects_holder::register<Coin>(account);
-        token_objects_holder::register<Design>(account);
     }
 
     public entry fun transfer_coin(
@@ -385,45 +404,12 @@ module flex_token::coins {
         token_objects_holder::add_to_holder(receiver, coin_obj);
     }
 
-    public entry fun transfer_design(
-        owner: &signer,
-        design_address: address,
-        receiver: address 
-    ) {
-        let design_obj = object::address_to_object<Design>(design_address);
-        managed_transfer_design(owner, design_obj, receiver);
-    }
-
-    fun managed_transfer_design(
-        owner: &signer,
-        design_obj: Object<Design>,
-        receiver: address
-    ) {
-        let owner_addr = signer::address_of(owner);
-        assert!(
-            exists<Design>(object::object_address(&design_obj)),
-            error::not_found(E_NO_SUCH_DESIGN)
-        );
-        assert!(
-            object::is_owner(design_obj, owner_addr),
-            error::permission_denied(E_NOT_OWNER)
-        );
-        assert!(
-            token_objects_holder::holds(owner_addr, design_obj),
-            error::permission_denied(E_NOT_OWNER)
-        );
-
-        object::transfer(owner, design_obj, receiver);
-        token_objects_holder::remove_from_holder(owner, design_obj);
-        token_objects_holder::add_to_holder(receiver, design_obj);
-    }
-
     public entry fun compose(
         owner: &signer,
         coin_address: address,
         design_address: address
     )
-    acquires Coin {
+    acquires Coin, Design {
         let coin_obj =  object::address_to_object<Coin>(coin_address);
         let design_obj = object::address_to_object<Design>(design_address);
         compose_coin(owner, coin_obj, design_obj);
@@ -434,7 +420,7 @@ module flex_token::coins {
         coin_obj: Object<Coin>,
         design_obj: Object<Design>
     )
-    acquires Coin {
+    acquires Coin, Design {
         assert!(
             exists<Coin>(object::object_address(&coin_obj)),
             error::not_found(E_NO_SUCH_COINS)
@@ -464,6 +450,10 @@ module flex_token::coins {
         let coin = borrow_global_mut<Coin>(
             object::object_address(&coin_obj)
         );
+        let design = borrow_global_mut<Design>(
+            object::object_address(&design_obj)
+        );
+        object::enable_ungated_transfer(&design.transfer_config);
         option::fill(&mut coin.design, design_obj);
         object::transfer_to_object(owner, design_obj, coin_obj);
         token_objects_holder::remove_from_holder(owner, design_obj);
@@ -474,7 +464,7 @@ module flex_token::coins {
         coin_address: address,
         design_address: address
     )
-    acquires Coin {
+    acquires Coin, Design {
         let coin_obj = object::address_to_object(coin_address);
         let design_obj = object::address_to_object(design_address);
         decompose_coin(owner, coin_obj, design_obj);
@@ -485,7 +475,7 @@ module flex_token::coins {
         coin_obj: Object<Coin>,
         design_obj: Object<Design>
     )
-    acquires Coin {
+    acquires Coin, Design {
         let coin_obj_addr = object::object_address(&coin_obj);
         assert!(
             exists<Coin>(coin_obj_addr),
@@ -511,7 +501,11 @@ module flex_token::coins {
             object::is_owner(design_obj, coin_obj_addr),
             error::permission_denied(E_NOT_OWNER)
         );
+        let design = borrow_global_mut<Design>(
+            object::object_address(&stored_design)
+        );
         object::transfer(owner, design_obj, owner_addr);
+        object::disable_ungated_transfer(&design.transfer_config);
         token_objects_holder::add_to_holder(owner_addr, design_obj);
     }
 
@@ -529,6 +523,30 @@ module flex_token::coins {
             vector::empty<u8>()
         );
         init_module(resource_signer);
+    }
+
+    #[test(
+        account = @admin,
+        resource = @flex_token,
+        other = @234
+    )]
+    #[expected_failure]
+    fun test_transfer_design_not_composed(
+        account: &signer, 
+        resource: &signer, 
+        other: &signer
+    )
+    acquires CoinsOnChainConfig {
+        setup_test(account, resource);
+
+        let design_obj = create_design(
+            account,
+            &utf8(b"coin-design-00"),
+            &utf8(b"design-00"),
+            &utf8(b"happy-birthdday"),
+            &utf8(b"design-00-url")    
+        );
+        object::transfer(account, design_obj, signer::address_of(other));
     }
 
     #[test(
@@ -589,7 +607,7 @@ module flex_token::coins {
         receiver = @234
     )]
     fun test_entry(account: &signer, resource: &signer, receiver: &signer)
-    acquires CoinsOnChainConfig, Coin {
+    acquires CoinsOnChainConfig, Coin, Design {
         setup_test(account, resource);
 
         mint_coin(
@@ -641,15 +659,11 @@ module flex_token::coins {
         decompose(receiver, coin_addr, design_addr);
         assert!(object::is_owner(design_obj, receiver_addr), 10);
         assert!(token_objects_holder::holds(receiver_addr, design_obj), 11);
-        transfer_design(receiver, design_addr, addr);
-        assert!(object::is_owner(design_obj, addr), 12);
-        assert!(token_objects_holder::holds(addr, design_obj), 13);
-            
     }
 
     #[test(account = @admin, resource = @flex_token)]
     fun test_coin_compose_decompose(account: &signer, resource: &signer)
-    acquires CoinsOnChainConfig, Coin {
+    acquires CoinsOnChainConfig, Coin, Design {
         setup_test(account, resource);
 
         let coin = create_coin(
@@ -707,7 +721,7 @@ module flex_token::coins {
         other = @0x234
     )]
     fun test_raw_transfer(account: &signer, resource: &signer, other: &signer)
-    acquires CoinsOnChainConfig, Coin {
+    acquires CoinsOnChainConfig, Coin, Design {
         setup_test(account, resource);
 
         let coin = create_coin(
@@ -733,7 +747,7 @@ module flex_token::coins {
     #[test(account = @admin, resource = @flex_token)]
     #[expected_failure]
     fun test_compose_not_exist_design(account: &signer, resource: &signer)
-    acquires CoinsOnChainConfig, Coin {
+    acquires CoinsOnChainConfig, Coin, Design {
         setup_test(account, resource);
 
         let coin = create_coin(
@@ -760,7 +774,7 @@ module flex_token::coins {
         resource: &signer, 
         other: &signer
     )
-    acquires CoinsOnChainConfig, Coin {
+    acquires CoinsOnChainConfig, Coin, Design {
         setup_test(account, resource);
         
         let coin = create_coin(
@@ -794,7 +808,7 @@ module flex_token::coins {
         resource: &signer,
         other: &signer
     )
-    acquires CoinsOnChainConfig, Coin {
+    acquires CoinsOnChainConfig, Coin, Design {
         setup_test(account, resource);
         
         let coin = create_coin(
@@ -804,13 +818,12 @@ module flex_token::coins {
             &utf8(b"coin-00-url"),
         );
         let design = create_design(
-            account,
+            other,
             &utf8(b"coin-design-01"),
             &utf8(b"design-01"),
             &utf8(b"happy-graduation"),
             &utf8(b"design-01-url")
         );
-        object::transfer(account, design, signer::address_of(other));
         compose_coin(account, coin, design);
     }
 
@@ -828,7 +841,7 @@ module flex_token::coins {
         resource: &signer, 
         other: &signer
     )
-    acquires CoinsOnChainConfig, Coin {
+    acquires CoinsOnChainConfig, Coin, Design {
         setup_test(account, resource);
         
         let coin = create_coin(
@@ -855,7 +868,7 @@ module flex_token::coins {
         location = Self
     )]
     fun test_decompose_invalid_design(account: &signer, resource: &signer)
-    acquires CoinsOnChainConfig, Coin {
+    acquires CoinsOnChainConfig, Coin, Design {
         setup_test(account, resource);
         
         let coin = create_coin(
@@ -943,7 +956,7 @@ module flex_token::coins {
         resource: &signer,
         fake: &signer
     )
-    acquires CoinsOnChainConfig, Coin {
+    acquires CoinsOnChainConfig, Coin, Design {
         setup_test(account, resource);
         
         let coin = create_coin(
@@ -972,7 +985,7 @@ module flex_token::coins {
         account: &signer, 
         resource: &signer,
         fake: &signer)
-    acquires CoinsOnChainConfig, Coin {
+    acquires CoinsOnChainConfig, Coin, Design {
         setup_test(account, resource);
 
         let coin = create_coin(
@@ -1038,7 +1051,7 @@ module flex_token::coins {
     #[test(account = @admin, resource = @flex_token)]
     #[expected_failure]
     fun test_compose_twice(account: &signer, resource: &signer)
-    acquires CoinsOnChainConfig, Coin {
+    acquires CoinsOnChainConfig, Coin, Design {
         setup_test(account, resource);
         
         let coin = create_coin(
@@ -1061,7 +1074,7 @@ module flex_token::coins {
     #[test(account = @admin, resource = @flex_token)]
     #[expected_failure]
     fun test_decompose_twice(account: &signer, resource: &signer)
-    acquires CoinsOnChainConfig, Coin {
+    acquires CoinsOnChainConfig, Coin, Design {
         setup_test(account, resource);
         
         let coin = create_coin(
