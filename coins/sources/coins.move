@@ -3,9 +3,11 @@
 // design can be transfered only when composed
 // coin is sttill transferable with 3rd party
 
-// soon:
-// make code upgradable - need onother contact ??
-// take fee on mint - 
+// do we really need resource account here ??
+// upgrading resouce account is...
+
+// everyone should be able to mint coin, them take fee
+// some entry don't need to be public
 
 // future:
 // supply info
