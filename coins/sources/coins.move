@@ -1,13 +1,11 @@
-// currently address is used as arg for playing with cli
-// but this might not be good practice
-// consider again after switch to client SDK
-
 // currently everyone can mint design
 // only admin can mint coin
-// fees can added later, but need client SDK
-
-// design is restricted to transfer and can be transfered only when composed
+// design can be transfered only when composed
 // coin is sttill transferable with 3rd party
+
+// soon:
+// make code upgradable - need onother contact ??
+// take fee on mint - 
 
 // future:
 // supply info
