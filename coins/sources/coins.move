@@ -3,7 +3,7 @@
 // design can be transfered only when composed
 // coin is sttill transferable with 3rd party
 
-// is resource account really required ??
+// upgrade resource account (think about key leak)
 // everyone should be able to mint coin, them take fee ??
 // some entry don't need to be public
 
