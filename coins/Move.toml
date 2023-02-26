@@ -3,13 +3,13 @@ name = 'Coins'
 version = '1.0.0'
 
 [addresses]
-#flex_token = "0xc3bb8488ab1a5815a9d543d7e41b0e0df46a7396f89b22821f07a4362f75ddc5"
-#admin = "0xcafe"
-flex_token = "_"
-admin = "b056d4a895d9374c2862e406ce5ee4ea2a4cde361e4cd9f9ab4f2869551c4f21"
-token_objects = "b056d4a895d9374c2862e406ce5ee4ea2a4cde361e4cd9f9ab4f2869551c4f21"
-token_objects_holder = "b056d4a895d9374c2862e406ce5ee4ea2a4cde361e4cd9f9ab4f2869551c4f21"
-#flex_token = "acbc58dbe9aa00e7034e5aa4f95dbe01a28a2af96c3df4600d4cd01515227894"
+flex_token = "0xc3bb8488ab1a5815a9d543d7e41b0e0df46a7396f89b22821f07a4362f75ddc5"
+admin = "0xcafe"
+#flex_token = "_"
+#admin = "0xb056d4a895d9374c2862e406ce5ee4ea2a4cde361e4cd9f9ab4f2869551c4f21"
+#token_objects = "0xb056d4a895d9374c2862e406ce5ee4ea2a4cde361e4cd9f9ab4f2869551c4f21"
+#token_objects_holder = "0xb056d4a895d9374c2862e406ce5ee4ea2a4cde361e4cd9f9ab4f2869551c4f21"
+#flex_token = "0xacbc58dbe9aa00e7034e5aa4f95dbe01a28a2af96c3df4600d4cd01515227894"
 
 [dependencies]
 AptosFramework = { local = "../../../aptos-core/aptos-move/framework/aptos-framework" }

@@ -3,8 +3,8 @@ name = 'TokenObjects'
 version = '1.0.0'
 
 [addresses]
-#token_objects = "0xcafe"
-token_objects = "_"
+token_objects = "0xcafe"
+#token_objects = "_"
 
 [dependencies]
 AptosFramework = { local = "../../../aptos-core/aptos-move/framework/aptos-framework" }
