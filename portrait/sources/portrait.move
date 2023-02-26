@@ -30,8 +30,6 @@ module flex_token::portrait {
     struct PortraitBase has key {
         face: Option<Object<Parts<Face>>>,
         hair: Option<Object<Parts<Hair>>>,
-        ear: Option<Object<Parts<Ear>>>,
-        nose: Option<Object<Parts<Nose>>>,
         eyes: Option<Object<Parts<Eyes>>>,
         mouth: Option<Object<Parts<Mouth>>>
     }
@@ -45,14 +43,12 @@ module flex_token::portrait {
 
     struct Face {}
     struct Hair {}
-    struct Ear {}
-    struct Nose {}
     struct Eyes {}
     struct Mouth {}
 
     fun init_module(caller: &signer) {
-        let portrait_collection_name = utf8(b"garage-token");
-        let parts_collection_name = utf8(b"garage-token-parts-collection");
+        let portrait_collection_name = utf8(b"flex-token");
+        let parts_collection_name = utf8(b"flex-token-parts-collection");
         _ = collection::create_fixed_collection(
             caller,
             utf8(b"user-customizbale-token"),
@@ -110,8 +106,6 @@ module flex_token::portrait {
             PortraitBase{
                 face: option::none(),
                 hair: option::none(),
-                ear: option::none(),
-                nose: option::none(),
                 eyes: option::none(),
                 mouth: option::none()
             }
@@ -217,50 +211,6 @@ module flex_token::portrait {
         );
     }
 
-    fun put_on_ear(
-        owner: &signer,
-        base_obj: Object<PortraitBase>,
-        parts_obj: Object<Parts<Ear>>
-    )
-    acquires PortraitBase {
-        put_on_check<Ear>(
-            owner,
-            base_obj,
-            parts_obj
-        );
-        let base = borrow_global_mut<PortraitBase>(
-            object::object_address(&base_obj)
-        );
-        option::fill(&mut base.ear, parts_obj);
-        object::transfer_to_object(
-            owner,
-            parts_obj,
-            base_obj
-        );
-    }
-
-    fun put_on_nose(
-        owner: &signer,
-        base_obj: Object<PortraitBase>,
-        parts_obj: Object<Parts<Nose>>
-    )
-    acquires PortraitBase {
-        put_on_check<Nose>(
-            owner,
-            base_obj,
-            parts_obj
-        );
-        let base = borrow_global_mut<PortraitBase>(
-            object::object_address(&base_obj)
-        );
-        option::fill(&mut base.nose, parts_obj);
-        object::transfer_to_object(
-            owner,
-            parts_obj,
-            base_obj
-        );
-    }
-
     fun put_on_eyes(
         owner: &signer,
         base_obj: Object<PortraitBase>,
@@ -354,56 +304,6 @@ module flex_token::portrait {
         let base_obj_addr = object::object_address(&base_obj);
         let base = borrow_global_mut<PortraitBase>(base_obj_addr);
         let stored_parts = option::extract(&mut base.face);
-        assert!(
-            stored_parts == parts_obj,
-            error::invalid_argument(E_INVALID_PARTS)
-        );
-        assert!(
-            object::is_owner(parts_obj, base_obj_addr),
-            error::permission_denied(E_NOT_OWNER)
-        );
-        object::transfer(
-            owner,
-            parts_obj,
-            signer::address_of(owner)
-        );
-    }
-
-    fun take_off_ear(
-        owner: &signer,
-        base_obj: Object<PortraitBase>,
-        parts_obj: Object<Parts<Ear>>
-    )
-    acquires PortraitBase {
-        take_off_check(owner, base_obj);
-        let base_obj_addr = object::object_address(&base_obj);
-        let base = borrow_global_mut<PortraitBase>(base_obj_addr);
-        let stored_parts = option::extract(&mut base.ear);
-        assert!(
-            stored_parts == parts_obj,
-            error::invalid_argument(E_INVALID_PARTS)
-        );
-        assert!(
-            object::is_owner(parts_obj, base_obj_addr),
-            error::permission_denied(E_NOT_OWNER)
-        );
-        object::transfer(
-            owner,
-            parts_obj,
-            signer::address_of(owner)
-        );
-    }
-
-    fun take_off_nose(
-        owner: &signer,
-        base_obj: Object<PortraitBase>,
-        parts_obj: Object<Parts<Nose>>
-    )
-    acquires PortraitBase {
-        take_off_check(owner, base_obj);
-        let base_obj_addr = object::object_address(&base_obj);
-        let base = borrow_global_mut<PortraitBase>(base_obj_addr);
-        let stored_parts = option::extract(&mut base.nose);
         assert!(
             stored_parts == parts_obj,
             error::invalid_argument(E_INVALID_PARTS)
@@ -526,66 +426,6 @@ module flex_token::portrait {
         assert!(object::is_owner(parts, base_obj_addr), 2);
 
         take_off_face(account, base, parts);
-        assert!(object::is_owner(parts, addr), 3);
-    }
-
-    #[test(account = @123)]
-    fun test_put_on_take_off_ear(account: &signer)
-    acquires PortraitOnChainConfig, PortraitBase {
-        init_module(account);
-        let addr = signer::address_of(account);
-
-        let base = crate_portrait_base(
-            account,
-            utf8(b"user-customizable-token-00"),
-            utf8(b"portrait-00"),
-            utf8(b"portrait-00-url")
-        );
-        assert!(object::is_owner(base, addr), 0);
-        let base_obj_addr = object::object_address(&base);
-
-        let parts = create<Ear>(
-            account,
-            utf8(b"token-parts-00"),
-            utf8(b"parts-00"),
-            utf8(b"ear"),
-            utf8(b"parts-00-url")
-        );
-        assert!(object::is_owner(parts, addr), 1);
-        put_on_ear(account, base, parts);
-        assert!(object::is_owner(parts, base_obj_addr), 2);
-
-        take_off_ear(account, base, parts);
-        assert!(object::is_owner(parts, addr), 3);
-    }
-
-    #[test(account = @123)]
-    fun test_put_on_take_off_nose(account: &signer)
-    acquires PortraitOnChainConfig, PortraitBase {
-        init_module(account);
-        let addr = signer::address_of(account);
-
-        let base = crate_portrait_base(
-            account,
-            utf8(b"user-customizable-token-00"),
-            utf8(b"portrait-00"),
-            utf8(b"portrait-00-url")
-        );
-        assert!(object::is_owner(base, addr), 0);
-        let base_obj_addr = object::object_address(&base);
-
-        let parts = create<Ear>(
-            account,
-            utf8(b"token-parts-00"),
-            utf8(b"parts-00"),
-            utf8(b"nose"),
-            utf8(b"parts-00-url")
-        );
-        assert!(object::is_owner(parts, addr), 1);
-        put_on_ear(account, base, parts);
-        assert!(object::is_owner(parts, base_obj_addr), 2);
-
-        take_off_ear(account, base, parts);
         assert!(object::is_owner(parts, addr), 3);
     }
 
