@@ -1,5 +1,5 @@
 import { AptosClient, Types } from 'aptos';
-import React, { ReactElement, ReactHTMLElement, ReactNode } from 'react';
+import React from 'react';
 import './App.css';
 
 const MODULEADDR = '0xacbc58dbe9aa00e7034e5aa4f95dbe01a28a2af96c3df4600d4cd01515227894'
@@ -9,7 +9,7 @@ const COINHOLDER_TYPE = `${LIBMODULEADDR}::token_objects_holder::TokenObjectsHol
 const DESIGNHOLDER_TYPE = `${LIBMODULEADDR}::token_objects_holder::TokenObjectsHolder<${MODULEADDR}::coins::Design>`
   
 interface Token {
-  inner: String
+  inner: string
 }
 
 interface TokenHolder {
@@ -17,7 +17,93 @@ interface TokenHolder {
 }
 
 interface StoredDesign {
-  vec: String[]
+  vec: string[]
+}
+
+interface CoinInfo {
+  collection: string
+  description: string
+  name: string
+  uri: string
+}
+
+interface DesignInfo {
+  collection: string
+  description: string
+  name: string
+  attribute: string
+  uri: string
+}
+
+function toCoinInfo(str: string|undefined): CoinInfo {
+  if (!str){
+    return {
+      collection: '',
+      description: '',
+      name: '',
+      uri: ''
+    }
+  }
+  console.log(str)
+  let elems = str.split(',')
+  let len = elems.length
+  if (len < 4) {
+    throw new Error('Number of elements not enough')
+  }
+  let modified: string[] = []
+  if (len > 4) {
+    for (let i = 0; i < len; i++) {
+      // this is just for handling mistakes
+      if (elems[i].length > 0) {
+        modified.push(elems[i])
+      }
+    }
+    if (modified.length > 4) {
+      throw new Error('Number of elements too many')
+    }
+  }
+  return {
+    collection: modified[0],
+    description: modified[1],
+    name: modified[2],
+    uri: modified[3]
+  }
+}
+
+function toDesignInfo(str: string|undefined): DesignInfo {
+  if (!str){
+    return {
+      collection: '',
+      description: '',
+      name: '',
+      attribute: '',
+      uri: ''
+    }
+  }
+  let elems = str.split(',')
+  let len = elems.length
+  if (len < 5) {
+    throw new Error('Number of elements not enough')
+  }
+  let modified: string[] = []
+  if (len > 5) {
+    // this is just for handling mistakes
+    for (let i = 0; i < len; i++) {
+      if (elems[i].length > 0) {
+        modified.push(elems[i])
+      }
+    }
+    if (modified.length > 4) {
+      throw new Error('Number of elements too many')
+    }
+  }
+  return {
+    collection: elems[0],
+    description: elems[1],
+    name: elems[2],
+    attribute: elems[3],
+    uri: elems[4]
+  }
 }
 
 const client = new AptosClient(LOCALNET)
@@ -47,7 +133,7 @@ function App() {
     console.log('getting modules')
   }, [address])
 
-  const [hasModule, setHasModule] = React.useState<Boolean>(false)
+  const [hasModule, setHasModule] = React.useState<boolean>(false)
   React.useEffect(() => {
     if (!address) {return}
     setHasModule(modules?.some((m) => m.abi?.name === 'coins'))
@@ -115,36 +201,101 @@ function App() {
   //   compose()
   // }, [address, account, hasModule, resource])
 
-  const [storedDesign, setStoredDesing] = React.useState<String[]>()
+  const [storedDesign, setStoredDesign] = React.useState<string[]>()
+  const [storedDesignInfo, setStoredDesignInfo] = React.useState<string[]>()
   React.useEffect(() => {
     if (!address || !account || !hasModule ||!resource || !coinHolder) {return}
     getStoredDesign()
+    console.log('getting stored design')
   }, [address, account, hasModule, resource, coinHolder])
 
   const getStoredDesign = async() => {
     const numCoins = coinHolder?.tokens.length
     if (!numCoins || numCoins == 0) {return}
-    let storedAddr: String[] = [] 
+    let storedAddrs: string[] = [] 
+    let storedInfos: string[] = []
     for (let i = 0; i < numCoins; i++) {
-      const payload = {
+      const payloadAddr = {
         function: `${MODULEADDR}::coins::coin_design`,
         arguments: [coinHolder.tokens[i].inner],
         type_arguments: []
       }  
-      const res = await client.view(payload)
-      const storedDesign = res[0] as StoredDesign
-      storedAddr.push(storedDesign.vec[0])
+      const resAddr = await client.view(payloadAddr)
+      const storedDesign = resAddr[0] as StoredDesign
+      const storedDesignAddr = storedDesign.vec[0] 
+      storedAddrs.push(storedDesignAddr)
+
+      const payloadInfo = {
+        function: `${MODULEADDR}::coins::design_info`,
+        arguments: [storedDesignAddr],
+        type_arguments: []
+      }
+      const resInfo = await client.view(payloadInfo)
+      const info = resInfo[0] as string
+      storedInfos.push(info)
     }
-    setStoredDesing(storedAddr)
-    console.log('getting stored design')
+    setStoredDesign(storedAddrs)
+    setStoredDesignInfo(storedInfos)
+  }
+
+  const [coinInfos, setCoinInfos] = React.useState<string[]>()
+  React.useEffect(() => {
+    if (!address || !account || !hasModule || !resource || !coinHolder) {return}
+    getCoinInfos()
+    console.log('getting coin infos')
+  }, [address, account, hasModule, resource, coinHolder])
+  
+  const getCoinInfos = async() => {
+    const numCoins = coinHolder?.tokens.length
+    if (!numCoins || numCoins == 0) {return}
+    let infos: string[] = []
+    for (let i = 0; i < numCoins; i++) {
+      const payload = {
+        function: `${MODULEADDR}::coins::coin_info`,
+        arguments: [coinHolder.tokens[i].inner],
+        type_arguments: []
+      }
+      const res = await client.view(payload)
+      const info = res[0] as string
+      infos.push(info)
+    }
+    setCoinInfos(infos)
+  }
+
+  const [designInfos, setDesignInfos] = React.useState<string[]>()
+  React.useEffect(() => {
+    if (!address || !account || !hasModule || !resource || !coinHolder) {return}
+    getDesignInfos()
+    console.log('getting design infos')
+  }, [address, account, hasModule, resource, coinHolder])
+
+  const getDesignInfos = async() => {
+    const numDesigns = designHolder?.tokens.length
+    if (!numDesigns || numDesigns == 0) {return}
+    let infos: string[] = []
+    for (let i = 0; i < numDesigns; i++) {
+      const payload = {
+        function: `${MODULEADDR}::coins::design_info`,
+        arguments: [designHolder.tokens[i].inner],
+        type_arguments: []
+      }
+      const res = await client.view(payload)
+      const info = res[0] as string
+      infos.push(info)
+    }
+    setDesignInfos(infos)
   }
 
   const coinList = () => {
     const coinItems = coinHolder?.tokens.map((token, index) => {
+      let coinInfo = toCoinInfo(coinInfos?.at(index)) 
+      let designInfo = toDesignInfo(storedDesignInfo?.at(index))
       return (
-        <li key={token.inner.toString()}>
-          {token.inner}
+        <li key={token.inner}>
+          <div>{token.inner}</div>
+          <div>url: {coinInfo.uri}</div>
           <div>StoredDesign: {storedDesign?.at(index)}</div>
+          <div>StoredUrl: {designInfo.uri}</div>
         </li>
       )
     }) 
@@ -152,8 +303,14 @@ function App() {
   }
 
   const designList = () => {
-    const designItems = designHolder?.tokens.map((token) => {
-      return (<li key={token.inner.toString()}>{token.inner}</li>)
+    const designItems = designHolder?.tokens.map((token, index) => {
+      let designInfo = toDesignInfo(designInfos?.at(index))
+      return (
+        <li key={token.inner}>
+          <div>{token.inner}</div>
+          <div>url: {designInfo.uri}</div>
+        </li>
+      )
     })
     return (designItems)
   }
@@ -164,8 +321,8 @@ function App() {
         Coins & Designs
       </header>
       <p className='App-p'>AccountAddress: {address}</p>
-      CoinAddress: <ul>{coinList()}</ul>
-      DesignAddress: <ul>{designList()}</ul>
+      <div>CoinAddress: <ul>{coinList()}</ul></div>
+      <div>DesignAddress: <ul>{designList()}</ul></div>
     </div>
   )
 }

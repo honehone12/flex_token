@@ -1,7 +1,5 @@
 // currently everyone can mint design
 // only admin can mint coin
-//  - everyone should be able to mint coin, them take fee ??
-//  - or something like buy() function ??
 // design can be transfered only when composed
 // coin is sttill transferable with 3rd party
 
@@ -9,11 +7,6 @@
 // supply info
 // royality info
 // mutator
-
-// i found upgrading modules under resource account is bigger topic than i thought.
-// it seems to be related to whole organization design(voting, election etc), but i don't go further in this topic.
-// i think we need at least multi admin management to make resource account neccesary complexity from view of security.
-// handling multi signer is also good another topic, but not here.
 
 module flex_token::coins {
     use std::signer;
@@ -149,6 +142,8 @@ module flex_token::coins {
         token::creator(obj)
     }
 
+    // !!!
+    // should return simply vector<String>
     #[view]
     public fun coin_info(object_address: address): String {
         let obj = verify_coin_address(object_address);
@@ -169,6 +164,8 @@ module flex_token::coins {
         token::creator(obj)
     }
 
+    // !!!
+    // should return simply vector<String>
     #[view]
     public fun design_info(object_address: address): String
     acquires Design {
