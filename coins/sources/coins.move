@@ -104,27 +104,16 @@ module flex_token::coins {
         );
     }
 
-    inline fun verify_coin_address(obj_addr: address): Object<Coin> {
-        assert!(
-            exists<Coin>(obj_addr),
-            error::not_found(E_INVALID_OBJECT_ADDRESS)
-        );
-        object::address_to_object<Coin>(obj_addr)
-    }
-
-    inline fun verify_design_address(obj_addr: address): Object<Design> {
-        assert!(
-            exists<Design>(obj_addr),
-            error::not_found(E_INVALID_OBJECT_ADDRESS)
-        );
-        object::address_to_object<Design>(obj_addr)
+    inline fun verify_address<T: key> (obj_addr: address): Object<T> {
+        assert!(exists<T>(obj_addr), error::not_found(E_INVALID_OBJECT_ADDRESS));
+        object::address_to_object<T>(obj_addr)
     }
 
     // anyone can view
     #[view]
     public fun coin_design(object_address: address): Option<address>
     acquires Coin {
-        let obj = verify_coin_address(object_address);
+        let obj = verify_address<Coin>(object_address);
         let coin = borrow_global<Coin>(object::object_address(&obj));
         let addr = if (option::is_some(&coin.design)) {
             option::some(
@@ -138,7 +127,7 @@ module flex_token::coins {
 
     #[view]
     public fun coin_creator(object_address: address): address {
-        let obj = verify_coin_address(object_address);
+        let obj = verify_address<Coin>(object_address);
         token::creator(obj)
     }
 
@@ -146,7 +135,7 @@ module flex_token::coins {
     // should return simply vector<String>
     #[view]
     public fun coin_info(object_address: address): String {
-        let obj = verify_coin_address(object_address);
+        let obj = verify_address<Coin>(object_address);
         let info = token::collection(obj);
         let separator = utf8(b",");
         string::append(&mut info, separator);
@@ -160,7 +149,7 @@ module flex_token::coins {
 
     #[view]
     public fun design_creator(object_address: address): address {
-        let obj = verify_design_address(object_address);
+        let obj = verify_address<Design>(object_address);
         token::creator(obj)
     }
 
@@ -169,7 +158,7 @@ module flex_token::coins {
     #[view]
     public fun design_info(object_address: address): String
     acquires Design {
-        let obj = verify_design_address(object_address);
+        let obj = verify_address<Design>(object_address);
         let design = borrow_global<Design>(object_address);
         let info = token::collection(obj);
         let separator = utf8(b",");
@@ -193,6 +182,8 @@ module flex_token::coins {
         collection::creator(on_chain_config.coin_collection_object)
     }
 
+    // !!!
+    // should return simply vector<String>
     #[view]
     public fun coin_collection_info(): String
     acquires CoinsOnChainConfig {
@@ -223,6 +214,8 @@ module flex_token::coins {
         collection::creator(on_chain_config.design_collection_object)
     }
 
+    // !!!
+    // should return simply vector<String>
     #[view]
     public fun design_collection_info(): String
     acquires CoinsOnChainConfig {
