@@ -121,27 +121,35 @@ function App() {
 
   const [account, setAccount] = React.useState<Types.AccountData|null>(null)
   React.useEffect(() => {
-    if (!address) {return}
+    if (!address) {
+      return
+    }
     client.getAccount(address).then(setAccount)
     console.log('getting account')
   }, [address])
 
   const [modules, setModules] = React.useState<Types.MoveModuleBytecode[]>([])
   React.useEffect(() => {
-    if (!address) {return}
+    if (!address) {
+      return
+    }
     client.getAccountModules(MODULEADDR).then(setModules)
     console.log('getting modules')
   }, [address])
 
   const [hasModule, setHasModule] = React.useState<boolean>(false)
   React.useEffect(() => {
-    if (!address) {return}
+    if (!address || !modules) {
+      return
+    }
     setHasModule(modules?.some((m) => m.abi?.name === 'coins'))
     console.log('checking module')
   }, [address, modules])
   
   // const mint = async(name: String) => {
-  //   if (!address || !account || !hasModule) {return}
+  //   if (!address || !account || !hasModule) {
+  //     return
+  //   }
   //   const payload = {
   //     type: 'entry_function_payload',
   //     function: `${MODULEADDR}::coins::mint_design`,
@@ -161,14 +169,18 @@ function App() {
 
   const [resource, setResource] = React.useState<Types.MoveResource[]>([])
   React.useEffect(() => {
-    if (!address) {return}
+    if (!address) {
+      return
+    }
     client.getAccountResources(address).then(setResource)
     console.log('getting resources')
   }, [address])
   
   const [coinHolder, setCoinholder] = React.useState<TokenHolder>()
   React.useEffect(() => {
-    if (!address || !resource || resource.length === 0) {return}
+    if (!address || !resource || resource.length === 0) {
+      return
+    }
     const coinHolders = resource.filter((value) => value.type === COINHOLDER_TYPE)
     setCoinholder(coinHolders[0].data as TokenHolder)
     console.log('checking coinholder')  
@@ -176,14 +188,18 @@ function App() {
 
   const [designHolder, setDesignholder] = React.useState<TokenHolder>()
   React.useEffect(() => {
-    if (!address || !resource || resource.length === 0) {return}
+    if (!address || !resource || resource.length === 0) {
+      return
+    }
     const designHolders = resource.filter((value) => value.type === DESIGNHOLDER_TYPE)
     setDesignholder(designHolders[0].data as TokenHolder)
     console.log('checking design holder')  
   }, [address, resource])
 
   // const compose = async() => {
-  //   if (!address || !hasModule || !account || !resource) {return}
+  //   if (!address || !hasModule || !account || !resource) {
+  //     return
+  //   }
   //   const payload = {
   //     type: 'entry_function_payload',
   //     function: `${MODULEADDR}::coins::compose`,
@@ -204,87 +220,90 @@ function App() {
   const [storedDesign, setStoredDesign] = React.useState<string[]>()
   const [storedDesignInfo, setStoredDesignInfo] = React.useState<string[]>()
   React.useEffect(() => {
-    if (!address || !account || !hasModule ||!resource || !coinHolder) {return}
+    if (!address || !account || !hasModule ||!resource || !coinHolder) {
+      return
+    }
+    const getStoredDesign = async() => {
+      const numCoins = coinHolder?.tokens.length
+      if (!numCoins || numCoins === 0) {return}
+      let storedAddrs: string[] = [] 
+      let storedInfos: string[] = []
+      for (let i = 0; i < numCoins; i++) {
+        const payloadAddr = {
+          function: `${MODULEADDR}::coins::coin_design`,
+          arguments: [coinHolder.tokens[i].inner],
+          type_arguments: []
+        }  
+        const resAddr = await client.view(payloadAddr)
+        const storedDesign = resAddr[0] as StoredDesign
+        const storedDesignAddr = storedDesign.vec[0] 
+        storedAddrs.push(storedDesignAddr)
+  
+        const payloadInfo = {
+          function: `${MODULEADDR}::coins::design_info`,
+          arguments: [storedDesignAddr],
+          type_arguments: []
+        }
+        const resInfo = await client.view(payloadInfo)
+        const info = resInfo[0] as string
+        storedInfos.push(info)
+      }
+      setStoredDesign(storedAddrs)
+      setStoredDesignInfo(storedInfos)
+    }
     getStoredDesign()
     console.log('getting stored design')
   }, [address, account, hasModule, resource, coinHolder])
 
-  const getStoredDesign = async() => {
-    const numCoins = coinHolder?.tokens.length
-    if (!numCoins || numCoins == 0) {return}
-    let storedAddrs: string[] = [] 
-    let storedInfos: string[] = []
-    for (let i = 0; i < numCoins; i++) {
-      const payloadAddr = {
-        function: `${MODULEADDR}::coins::coin_design`,
-        arguments: [coinHolder.tokens[i].inner],
-        type_arguments: []
-      }  
-      const resAddr = await client.view(payloadAddr)
-      const storedDesign = resAddr[0] as StoredDesign
-      const storedDesignAddr = storedDesign.vec[0] 
-      storedAddrs.push(storedDesignAddr)
-
-      const payloadInfo = {
-        function: `${MODULEADDR}::coins::design_info`,
-        arguments: [storedDesignAddr],
-        type_arguments: []
-      }
-      const resInfo = await client.view(payloadInfo)
-      const info = resInfo[0] as string
-      storedInfos.push(info)
-    }
-    setStoredDesign(storedAddrs)
-    setStoredDesignInfo(storedInfos)
-  }
-
   const [coinInfos, setCoinInfos] = React.useState<string[]>()
   React.useEffect(() => {
-    if (!address || !account || !hasModule || !resource || !coinHolder) {return}
+    if (!address || !account || !hasModule || !resource || !coinHolder) {
+      return
+    }
+    const getCoinInfos = async() => {
+      const numCoins = coinHolder?.tokens.length
+      if (!numCoins || numCoins === 0) {return}
+      let infos: string[] = []
+      for (let i = 0; i < numCoins; i++) {
+        const payload = {
+          function: `${MODULEADDR}::coins::coin_info`,
+          arguments: [coinHolder.tokens[i].inner],
+          type_arguments: []
+        }
+        const res = await client.view(payload)
+        const info = res[0] as string
+        infos.push(info)
+      }
+      setCoinInfos(infos)
+    }
     getCoinInfos()
     console.log('getting coin infos')
   }, [address, account, hasModule, resource, coinHolder])
-  
-  const getCoinInfos = async() => {
-    const numCoins = coinHolder?.tokens.length
-    if (!numCoins || numCoins == 0) {return}
-    let infos: string[] = []
-    for (let i = 0; i < numCoins; i++) {
-      const payload = {
-        function: `${MODULEADDR}::coins::coin_info`,
-        arguments: [coinHolder.tokens[i].inner],
-        type_arguments: []
-      }
-      const res = await client.view(payload)
-      const info = res[0] as string
-      infos.push(info)
-    }
-    setCoinInfos(infos)
-  }
 
   const [designInfos, setDesignInfos] = React.useState<string[]>()
   React.useEffect(() => {
-    if (!address || !account || !hasModule || !resource || !coinHolder) {return}
+    if (!address || !account || !hasModule || !resource || !designHolder) {
+      return
+    }
+    const getDesignInfos = async() => {
+      const numDesigns = designHolder?.tokens.length
+      if (!numDesigns || numDesigns === 0) {return}
+      let infos: string[] = []
+      for (let i = 0; i < numDesigns; i++) {
+        const payload = {
+          function: `${MODULEADDR}::coins::design_info`,
+          arguments: [designHolder.tokens[i].inner],
+          type_arguments: []
+        }
+        const res = await client.view(payload)
+        const info = res[0] as string
+        infos.push(info)
+      }
+      setDesignInfos(infos)
+    }
     getDesignInfos()
     console.log('getting design infos')
-  }, [address, account, hasModule, resource, coinHolder])
-
-  const getDesignInfos = async() => {
-    const numDesigns = designHolder?.tokens.length
-    if (!numDesigns || numDesigns == 0) {return}
-    let infos: string[] = []
-    for (let i = 0; i < numDesigns; i++) {
-      const payload = {
-        function: `${MODULEADDR}::coins::design_info`,
-        arguments: [designHolder.tokens[i].inner],
-        type_arguments: []
-      }
-      const res = await client.view(payload)
-      const info = res[0] as string
-      infos.push(info)
-    }
-    setDesignInfos(infos)
-  }
+  }, [address, account, hasModule, resource, designHolder])
 
   const coinList = () => {
     const coinItems = coinHolder?.tokens.map((token, index) => {
