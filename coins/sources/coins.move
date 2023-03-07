@@ -1,7 +1,7 @@
 // currently everyone can mint design
 // only admin can mint coin
 // design can be transfered only when composed
-// coin is sttill transferable with 3rd party
+// coin is sttill transferable with 3rd party contract
 
 // future:
 // supply info
@@ -344,7 +344,8 @@ module flex_token::coins {
         assert!(
             string::length(description) <= MAX_DESC &&
             string::length(name) <= MAX_NAME &&
-            string::length(uri) <= MAX_URL,
+            string::length(uri) <= MAX_URL &&
+            string::length(design_attribute) <= MAX_NAME,
             error::invalid_argument(E_TOO_LONG_INPUT)
         );
         

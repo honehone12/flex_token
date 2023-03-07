@@ -10,6 +10,12 @@ module token_objects_holder::token_objects_holder {
     const E_NOT_OWNER: u64 = 4;
     const E_STILL_OWNER: u64 = 5;
 
+    #[resource_group(scope = global)]
+    struct HolderGroup{}
+
+    #[resource_group_member(
+        group = HolderGroup
+    )]
     struct TokenObjectsHolder<phantom T: key> has key {
         tokens: vector<Object<T>>
     }
