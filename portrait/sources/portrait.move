@@ -16,7 +16,7 @@ module flex_token::portrait {
     const E_NO_SUCH_PARTS: u64 = 2;
     const E_INVALID_PARTS: u64 = 3;
     const E_NOT_OWNER: u64 = 4;
-    const E_INVALID_PARTS_ID: u64 = 5;
+    const E_ALREADY_HOLDS: u64 = 5;
     const E_NOT_ADMIN: u64 = 6;
     const E_TOO_LONG_INPUT: u64 = 7;
 
@@ -319,9 +319,14 @@ module flex_token::portrait {
             object::is_owner(*base, owner_addr),
             error::permission_denied(E_NOT_OWNER)
         );
+        assert!(
+            token_objects_holder::holds(owner_addr, *base),
+            error::permission_denied(E_NOT_OWNER)
+        );
     }
 
     inline fun verify_stored_parts<P>(
+        owner_addr: address,
         stored: &Object<Parts<P>>,
         selected: &Object<Parts<P>>,
         base_addr: address
@@ -333,6 +338,10 @@ module flex_token::portrait {
         assert!(
             object::is_owner(*stored, base_addr),
             error::permission_denied(E_NOT_OWNER)
+        );
+        assert!(
+            !token_objects_holder::holds(owner_addr, *selected),
+            error::invalid_argument(E_ALREADY_HOLDS)
         );
     }
 
@@ -347,7 +356,7 @@ module flex_token::portrait {
         let base_obj_addr = object::object_address(base_obj);
         let base = borrow_global_mut<PortraitBase>(base_obj_addr);
         let stored_parts = option::extract(&mut base.hair);
-        verify_stored_parts(&stored_parts, parts_obj, base_obj_addr);
+        verify_stored_parts(owner_addr, &stored_parts, parts_obj, base_obj_addr);
         object::transfer(owner, stored_parts, owner_addr);
         token_objects_holder::add_to_holder(owner_addr, stored_parts);
         let parts = borrow_global<Parts<Hair>>(object::object_address(parts_obj));
@@ -365,7 +374,7 @@ module flex_token::portrait {
         let base_obj_addr = object::object_address(base_obj);
         let base = borrow_global_mut<PortraitBase>(base_obj_addr);
         let stored_parts = option::extract(&mut base.face);
-        verify_stored_parts(&stored_parts, parts_obj, base_obj_addr);
+        verify_stored_parts(owner_addr, &stored_parts, parts_obj, base_obj_addr);
         object::transfer(owner, stored_parts, owner_addr);
         token_objects_holder::add_to_holder(owner_addr, stored_parts);
         let parts = borrow_global<Parts<Face>>(object::object_address(parts_obj));
@@ -383,7 +392,7 @@ module flex_token::portrait {
         let base_obj_addr = object::object_address(base_obj);
         let base = borrow_global_mut<PortraitBase>(base_obj_addr);
         let stored_parts = option::extract(&mut base.eyes);
-        verify_stored_parts(&stored_parts, parts_obj, base_obj_addr);
+        verify_stored_parts(owner_addr, &stored_parts, parts_obj, base_obj_addr);
         object::transfer(owner, stored_parts, owner_addr);
         token_objects_holder::add_to_holder(owner_addr, stored_parts);
         let parts = borrow_global<Parts<Eyes>>(object::object_address(parts_obj));
@@ -401,11 +410,145 @@ module flex_token::portrait {
         let base_obj_addr = object::object_address(base_obj);
         let base = borrow_global_mut<PortraitBase>(base_obj_addr);
         let stored_parts = option::extract(&mut base.mouth);
-        verify_stored_parts(&stored_parts, parts_obj, base_obj_addr);
+        verify_stored_parts(owner_addr, &stored_parts, parts_obj, base_obj_addr);
         object::transfer(owner, stored_parts, owner_addr);
         token_objects_holder::add_to_holder(owner_addr, stored_parts);
         let parts = borrow_global<Parts<Mouth>>(object::object_address(parts_obj));
         object::disable_ungated_transfer(&parts.transfer_config);
+    }
+
+    fun managed_transfer(
+        owner: &signer, 
+        portrait: &Object<PortraitBase>,
+        to: address
+    ) {
+        let owner_addr = signer::address_of(owner);
+        verify_base(owner_addr, portrait);
+        object::transfer(owner, *portrait, to);
+        token_objects_holder::remove_from_holder(owner, *portrait);
+        token_objects_holder::add_to_holder(to, *portrait);
+    }
+
+    fun manual_update(account: &signer) {
+        token_objects_holder::update<PortraitBase>(account);
+        token_objects_holder::update<Parts<Hair>>(account);
+        token_objects_holder::update<Parts<Face>>(account);
+        token_objects_holder::update<Parts<Eyes>>(account);
+        token_objects_holder::update<Parts<Mouth>>(account);
+    }
+
+    fun recover(account: &signer, portrait_address: address) {
+        token_objects_holder::recover<PortraitBase>(account, portrait_address);
+    }
+
+    #[test(account = @admin, other = @0xbeef)]
+    fun test_transfer(account: &signer, other: &signer)
+    acquires PortraitOnChainConfig, PortraitBase, Parts {
+        init_module(account);
+        let base = crate_portrait_base(
+            account,
+            &utf8(b"user-customizable-token-00"),
+            &utf8(b"portrait-00"),
+            &utf8(b"portrait-00-url")
+        );
+        let hair = create<Hair>(
+            account,
+            &utf8(b"token-parts-00"),
+            &utf8(b"parts-00-00"),
+            &utf8(b"hair"),
+            &utf8(b"parts-00-url")
+        );
+        let face = create<Face>(
+            account,
+            &utf8(b"token-parts-00"),
+            &utf8(b"parts-01-00"),
+            &utf8(b"face"),
+            &utf8(b"parts-00-url")
+        );
+        let eyes = create<Eyes>(
+            account,
+            &utf8(b"token-parts-00"),
+            &utf8(b"parts-02-00"),
+            &utf8(b"eyes"),
+            &utf8(b"parts-00-url")
+        );
+        let mouth = create<Mouth>(
+            account,
+            &utf8(b"token-parts-00"),
+            &utf8(b"parts-03-00"),
+            &utf8(b"mouth"),
+            &utf8(b"parts-00-url")
+        );
+        put_on_hair(account, &base, &hair);
+        put_on_face(account, &base, &face);
+        put_on_eyes(account, &base, &eyes);
+        put_on_mouth(account, &base, &mouth);
+        let to = signer::address_of(other);
+        register_all(other);
+        managed_transfer(account, &base, to);
+        assert!(object::is_owner(base, to), 0);
+        assert!(token_objects_holder::holds(to, base), 1);
+        assert!(!token_objects_holder::holds(@admin, base), 2);   
+    }
+
+    #[test(account = @admin, other = @0xbeef)]
+    #[expected_failure(abort_code = 327683, location = aptos_framework::object)]
+    fun test_ungated_transfer_fail_hair(account: &signer, other: address)
+    acquires PortraitOnChainConfig {
+        init_module(account);
+        let hair = create<Hair>(
+            account,
+            &utf8(b"token-parts-00"),
+            &utf8(b"parts-00"),
+            &utf8(b"hair"),
+            &utf8(b"parts-00-url")
+        );
+        object::transfer(account, hair, other);
+    }
+
+    #[test(account = @admin, other = @0xbeef)]
+    #[expected_failure(abort_code = 327683, location = aptos_framework::object)]
+    fun test_ungated_transfer_fail_face(account: &signer, other: address)
+    acquires PortraitOnChainConfig {
+        init_module(account);
+        let face = create<Face>(
+            account,
+            &utf8(b"token-parts-00"),
+            &utf8(b"parts-00"),
+            &utf8(b"face"),
+            &utf8(b"parts-00-url")
+        );
+        object::transfer(account, face, other);
+    }
+
+    #[test(account = @admin, other = @0xbeef)]
+    #[expected_failure(abort_code = 327683, location = aptos_framework::object)]
+    fun test_ungated_transfer_fail_eyes(account: &signer, other: address)
+    acquires PortraitOnChainConfig {
+        init_module(account);
+        let eyes = create<Eyes>(
+            account,
+            &utf8(b"token-parts-00"),
+            &utf8(b"parts-00"),
+            &utf8(b"eyes"),
+            &utf8(b"parts-00-url")
+        );
+        object::transfer(account, eyes, other);
+    }
+
+    #[test(account = @admin, other = @0xbeef)]
+    #[expected_failure(abort_code = 327683, location = aptos_framework::object)]
+    fun test_ungated_transfer_fail_mouth(account: &signer, other: address)
+    acquires PortraitOnChainConfig {
+        init_module(account);
+        let mouth = create<Mouth>(
+            account,
+            &utf8(b"token-parts-00"),
+            &utf8(b"parts-00"),
+            &utf8(b"mouth"),
+            &utf8(b"parts-00-url")
+        );
+        object::transfer(account, mouth, other);
     }
 
     #[test(account = @admin)]
@@ -421,8 +564,9 @@ module flex_token::portrait {
             &utf8(b"portrait-00-url")
         );
         assert!(object::is_owner(base, addr), 0);
-        let base_obj_addr = object::object_address(&base);
+        assert!(token_objects_holder::holds(addr, base), 4);
 
+        let base_obj_addr = object::object_address(&base);
         let parts = create<Hair>(
             account,
             &utf8(b"token-parts-00"),
@@ -431,11 +575,15 @@ module flex_token::portrait {
             &utf8(b"parts-00-url")
         );
         assert!(object::is_owner(parts, addr), 1);
+        assert!(token_objects_holder::holds(addr, parts), 5);
+
         put_on_hair(account, &base, &parts);
         assert!(object::is_owner(parts, base_obj_addr), 2);
+        assert!(!token_objects_holder::holds(addr, parts), 6);
 
         take_off_hair(account, &base, &parts);
         assert!(object::is_owner(parts, addr), 3);
+        assert!(token_objects_holder::holds(addr, parts), 7);
     }
 
     #[test(account = @admin)]
@@ -451,8 +599,9 @@ module flex_token::portrait {
             &utf8(b"portrait-00-url")
         );
         assert!(object::is_owner(base, addr), 0);
-        let base_obj_addr = object::object_address(&base);
+        assert!(token_objects_holder::holds(addr, base), 4);
 
+        let base_obj_addr = object::object_address(&base);
         let parts = create<Face>(
             account,
             &utf8(b"token-parts-00"),
@@ -461,11 +610,15 @@ module flex_token::portrait {
             &utf8(b"parts-00-url")
         );
         assert!(object::is_owner(parts, addr), 1);
+        assert!(token_objects_holder::holds(addr, parts), 5);
+
         put_on_face(account, &base, &parts);
         assert!(object::is_owner(parts, base_obj_addr), 2);
+        assert!(!token_objects_holder::holds(addr, parts), 6);
 
         take_off_face(account, &base, &parts);
         assert!(object::is_owner(parts, addr), 3);
+        assert!(token_objects_holder::holds(addr, parts), 7);
     }
 
     #[test(account = @admin)]
@@ -481,8 +634,9 @@ module flex_token::portrait {
             &utf8(b"portrait-00-url")
         );
         assert!(object::is_owner(base, addr), 0);
-        let base_obj_addr = object::object_address(&base);
+        assert!(token_objects_holder::holds(addr, base), 4);
 
+        let base_obj_addr = object::object_address(&base);
         let parts = create<Eyes>(
             account,
             &utf8(b"token-parts-00"),
@@ -491,11 +645,15 @@ module flex_token::portrait {
             &utf8(b"parts-00-url")
         );
         assert!(object::is_owner(parts, addr), 1);
+        assert!(token_objects_holder::holds(addr, parts), 5);
+
         put_on_eyes(account, &base, &parts);
         assert!(object::is_owner(parts, base_obj_addr), 2);
+        assert!(!token_objects_holder::holds(addr, parts), 6);
 
         take_off_eyes(account, &base, &parts);
         assert!(object::is_owner(parts, addr), 3);
+        assert!(token_objects_holder::holds(addr, parts), 7);
     }
 
     #[test(account = @admin)]
@@ -511,8 +669,9 @@ module flex_token::portrait {
             &utf8(b"portrait-00-url")
         );
         assert!(object::is_owner(base, addr), 0);
-        let base_obj_addr = object::object_address(&base);
+        assert!(token_objects_holder::holds(addr, base), 4);
 
+        let base_obj_addr = object::object_address(&base);
         let parts = create<Mouth>(
             account,
             &utf8(b"token-parts-00"),
@@ -521,10 +680,14 @@ module flex_token::portrait {
             &utf8(b"parts-00-url")
         );
         assert!(object::is_owner(parts, addr), 1);
+        assert!(token_objects_holder::holds(addr, parts), 5);
+
         put_on_mouth(account, &base, &parts);
         assert!(object::is_owner(parts, base_obj_addr), 2);
+        assert!(!token_objects_holder::holds(addr, parts), 6);
 
         take_off_mouth(account, &base, &parts);
         assert!(object::is_owner(parts, addr), 3);
+        assert!(token_objects_holder::holds(addr, parts), 7);
     }
 }

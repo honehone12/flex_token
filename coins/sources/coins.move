@@ -109,6 +109,7 @@ module flex_token::coins {
         object::address_to_object<T>(obj_addr)
     }
 
+    // !!!
     // anyone can view
     #[view]
     public fun coin_design(object_address: address): Option<address>
@@ -132,12 +133,14 @@ module flex_token::coins {
     }
 
     // !!!
-    // should return simply vector<String>
+    // simply vector<String> looks better when client is JS.
+    // but how about when client is C# or even C++ ??
+    // might be happier to just split string than parsing JSON.
     #[view]
     public fun coin_info(object_address: address): String {
         let obj = verify_address<Coin>(object_address);
         let info = token::collection(obj);
-        let separator = utf8(b",");
+        let separator = utf8(b"||");
         string::append(&mut info, separator);
         string::append(&mut info, token::description(obj));
         string::append(&mut info, separator);
@@ -153,15 +156,13 @@ module flex_token::coins {
         token::creator(obj)
     }
 
-    // !!!
-    // should return simply vector<String>
     #[view]
     public fun design_info(object_address: address): String
     acquires Design {
         let obj = verify_address<Design>(object_address);
         let design = borrow_global<Design>(object_address);
         let info = token::collection(obj);
-        let separator = utf8(b",");
+        let separator = utf8(b"||");
         string::append(&mut info, separator);
         string::append(&mut info, token::description(obj));
         string::append(&mut info, separator);
@@ -182,8 +183,6 @@ module flex_token::coins {
         collection::creator(on_chain_config.coin_collection_object)
     }
 
-    // !!!
-    // should return simply vector<String>
     #[view]
     public fun coin_collection_info(): String
     acquires CoinsOnChainConfig {
@@ -191,7 +190,7 @@ module flex_token::coins {
             @flex_token
         );
         let info = collection::description(on_chain_config.coin_collection_object);
-        let separator = utf8(b",");
+        let separator = utf8(b"||");
         string::append(&mut info, separator);
         string::append(
             &mut info,
@@ -214,8 +213,6 @@ module flex_token::coins {
         collection::creator(on_chain_config.design_collection_object)
     }
 
-    // !!!
-    // should return simply vector<String>
     #[view]
     public fun design_collection_info(): String
     acquires CoinsOnChainConfig {
@@ -223,7 +220,7 @@ module flex_token::coins {
             @flex_token
         );
         let info = collection::description(on_chain_config.design_collection_object);
-        let separator = utf8(b",");
+        let separator = utf8(b"||");
         string::append(&mut info, separator);
         string::append(
             &mut info,
@@ -241,17 +238,18 @@ module flex_token::coins {
         register_all(account);
     }
 
-    inline fun register_all(account: &signer) {
+    fun register_all(account: &signer) {
         token_objects_holder::register<Coin>(account);
         token_objects_holder::register<Design>(account);
     }
 
+    // !!!
     // this should be called after 3rd party transfer
     public entry fun update_resource(account: &signer) {
         manual_update(account);
     }
 
-    inline fun manual_update(account: &signer) {
+    fun manual_update(account: &signer) {
         token_objects_holder::update<Coin>(account);
         token_objects_holder::update<Design>(account);
     }
@@ -410,6 +408,17 @@ module flex_token::coins {
         object::transfer(owner, coin_obj, receiver);
         token_objects_holder::remove_from_holder(owner, coin_obj);
         token_objects_holder::add_to_holder(receiver, coin_obj);
+    }
+
+    // !!!
+    // when someone transfer coin with 3rd party,
+    // receiver's holder will simply lost it.
+    entry fun recover_coin(owner: &signer, coin_address: address) {
+        recover(owner, coin_address);
+    }
+
+    fun recover(owner: &signer, coin_address: address) {
+        token_objects_holder::recover<Coin>(owner, coin_address);
     }
 
     entry fun compose(
@@ -620,24 +629,24 @@ module flex_token::coins {
         assert!(design_creator(design_addr) == @234, 1);
         assert!(
             coin_info(coin_addr) == 
-            utf8(b"flex-coin,user-customizable-coin-00,coin-00,coin-00-url"), 
+            utf8(b"flex-coin||user-customizable-coin-00||coin-00||coin-00-url"), 
             2
         );
         assert!(
             design_info(design_addr) == 
-            utf8(b"flex-coin-design-collection,coin-design-00,design-00,happy-birthdday,design-00-url"), 
+            utf8(b"flex-coin-design-collection||coin-design-00||design-00||happy-birthdday||design-00-url"), 
             3
         );
         assert!(coin_collection_creator() == @flex_token, 4);
         assert!(design_collection_creator() == @flex_token, 5);
         assert!(
             coin_collection_info() ==
-            utf8(b"user-customizable-coin,flex-coin,coin-collection-url"),
+            utf8(b"user-customizable-coin||flex-coin||coin-collection-url"),
             6
         );
         assert!(
             design_collection_info() ==
-            utf8(b"design-collection-for-user-customizable-coin,flex-coin-design-collection,design-collection-url"),
+            utf8(b"design-collection-for-user-customizable-coin||flex-coin-design-collection||design-collection-url"),
             7
         );
 
@@ -799,6 +808,11 @@ module flex_token::coins {
         object::transfer(account, coin, recipient_addr);
         assert!(object::is_owner(coin, recipient_addr), 0);
         assert!(object::is_owner(design, object::object_address(&coin)), 1);
+
+        recover_coin(other, object::object_address(&coin));
+        assert!(token_objects_holder::holds(recipient_addr, coin), 2);
+        assert!(token_objects_holder::num_holds<Coin>(recipient_addr) == 1, 3);
+        assert!(token_objects_holder::num_holds<Design>(recipient_addr) == 0, 4);
     }
 
     #[test(account = @admin, resource = @flex_token)]
@@ -1041,7 +1055,8 @@ module flex_token::coins {
     fun test_invalid_caller_decompose(
         account: &signer, 
         resource: &signer,
-        fake: &signer)
+        fake: &signer
+    )
     acquires CoinsOnChainConfig, Coin, Design {
         setup_test(account, resource);
 

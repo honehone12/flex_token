@@ -126,11 +126,20 @@ module token_objects_holder::token_objects_holder {
         holder.tokens = new_vec;
     }
 
+    public fun recover<T: key>(account: &signer, object_address: address)
+    acquires TokenObjectsHolder {
+        register<T>(account);
+        add_to_holder(
+            signer::address_of(account),
+            object::address_to_object<T>(object_address)
+        );
+    }
+
     #[test_only]
     struct TestToken has key {
     }
 
-    #[test(account = @123)] 
+    #[test(account = @0x123)] 
     fun test_holder(account: &signer)
     acquires TokenObjectsHolder {
         register<TestToken>(account);
@@ -156,7 +165,7 @@ module token_objects_holder::token_objects_holder {
         );
     }
 
-    #[test(account = @123)] 
+    #[test(account = @0x123)] 
     #[expected_failure(
         abort_code = 0x80001,
         location = Self
@@ -173,7 +182,7 @@ module token_objects_holder::token_objects_holder {
         add_to_holder<TestToken>(addr, obj);
     }
 
-    #[test(account = @123)] 
+    #[test(account = @0x123)] 
     #[expected_failure(
         abort_code = 0x60002,
         location = Self
@@ -197,7 +206,7 @@ module token_objects_holder::token_objects_holder {
         remove_from_holder<TestToken>(account, obj);
     }
 
-    #[test(account = @123)]
+    #[test(account = @0x123)]
     fun test_update(account: &signer)
     acquires TokenObjectsHolder {
         register<TestToken>(account);
@@ -222,5 +231,18 @@ module token_objects_holder::token_objects_holder {
             num_holds<TestToken>(addr) == 0,
             0
         );
+    }
+
+    #[test(account = @0x123)]
+    fun test_recover(account: &signer)
+    acquires TokenObjectsHolder {
+        let cctor = object::create_named_object(account, b"testobj");
+        let obj_signer = object::generate_signer(&cctor);
+        move_to(&obj_signer, TestToken{});
+        let obj = object::object_from_constructor_ref<TestToken>(&cctor);
+        recover<TestToken>(account, object::object_address(&obj));
+        let addr = signer::address_of(account);
+        assert!(holds(addr, obj), 0);
+        assert!(num_holds<TestToken>(addr) == 1, 1);
     }
 }
