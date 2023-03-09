@@ -34,10 +34,8 @@ module flex_token::coins {
 
     struct CoinsOnChainConfig has key {
         signer_capability: SignerCapability,
-        coin_collection_name: String,
         coin_mutability_config: MutabilityConfig,
         coin_collection_object: Object<Collection>,
-        design_collection_name: String,
         design_mutability_config: MutabilityConfig,
         design_collection_object: Object<Collection> 
     }
@@ -63,14 +61,12 @@ module flex_token::coins {
             @admin
         );
 
-        let coin_collection_name = utf8(b"flex-coin");
-        let design_collection_name = utf8(b"flex-coin-design-collection");
         let coin_collection_cctor = collection::create_fixed_collection(
             resource_signer,
             utf8(b"user-customizable-coin"),
             1000_000,
             collection::create_mutability_config(false, false),
-            coin_collection_name,
+            utf8(b"flex-coin"),
             option::none(),
             utf8(b"coin-collection-url")
         );
@@ -78,7 +74,7 @@ module flex_token::coins {
             resource_signer,
             utf8(b"design-collection-for-user-customizable-coin"),
             collection::create_mutability_config(false, false),
-            design_collection_name,
+            utf8(b"flex-coin-design-collection"),
             option::none(),
             utf8(b"design-collection-url")
         );
@@ -86,14 +82,12 @@ module flex_token::coins {
             resource_signer, 
             CoinsOnChainConfig {
                 signer_capability,
-                coin_collection_name,
                 coin_mutability_config: token::create_mutability_config(
                     false, false, false
                 ),
                 coin_collection_object: object::object_from_constructor_ref<Collection>(
                     &coin_collection_cctor
                 ), 
-                design_collection_name,
                 design_mutability_config: token::create_mutability_config(
                     false, false, false
                 ),
@@ -114,8 +108,8 @@ module flex_token::coins {
     #[view]
     public fun coin_design(object_address: address): Option<address>
     acquires Coin {
-        let obj = verify_address<Coin>(object_address);
-        let coin = borrow_global<Coin>(object::object_address(&obj));
+        _ = verify_address<Coin>(object_address);
+        let coin = borrow_global<Coin>(object_address);
         let addr = if (option::is_some(&coin.design)) {
             option::some(
                 object::object_address(option::borrow(&coin.design))
@@ -135,7 +129,8 @@ module flex_token::coins {
     // !!!
     // simply vector<String> looks better when client is JS.
     // but how about when client is C# or even C++ ??
-    // might be happier to just split string than parsing JSON.
+    // might be happier to just split string than to parse JSON.
+    // try vec in another module anyway.
     #[view]
     public fun coin_info(object_address: address): String {
         let obj = verify_address<Coin>(object_address);
@@ -177,18 +172,14 @@ module flex_token::coins {
     #[view]
     public fun coin_collection_creator(): address
     acquires CoinsOnChainConfig {
-        let on_chain_config = borrow_global<CoinsOnChainConfig>(
-            @flex_token
-        );
+        let on_chain_config = borrow_global<CoinsOnChainConfig>(@flex_token);
         collection::creator(on_chain_config.coin_collection_object)
     }
 
     #[view]
     public fun coin_collection_info(): String
     acquires CoinsOnChainConfig {
-        let on_chain_config = borrow_global<CoinsOnChainConfig>(
-            @flex_token
-        );
+        let on_chain_config = borrow_global<CoinsOnChainConfig>(@flex_token);
         let info = collection::description(on_chain_config.coin_collection_object);
         let separator = utf8(b"||");
         string::append(&mut info, separator);
@@ -234,26 +225,6 @@ module flex_token::coins {
         info
     }
 
-    public entry fun register(account: &signer) {
-        register_all(account);
-    }
-
-    fun register_all(account: &signer) {
-        token_objects_holder::register<Coin>(account);
-        token_objects_holder::register<Design>(account);
-    }
-
-    // !!!
-    // this should be called after 3rd party transfer
-    public entry fun update_resource(account: &signer) {
-        manual_update(account);
-    }
-
-    fun manual_update(account: &signer) {
-        token_objects_holder::update<Coin>(account);
-        token_objects_holder::update<Design>(account);
-    }
-
     entry fun mint_coin(
         creator: &signer,
         description: String,
@@ -294,7 +265,7 @@ module flex_token::coins {
         );
         let cctor_ref = token::create_token(
             creator,
-            on_chain_config.coin_collection_name,
+            collection::name(on_chain_config.coin_collection_object),
             *description,
             on_chain_config.coin_mutability_config,
             *name,
@@ -353,7 +324,7 @@ module flex_token::coins {
         );
         let cctor_ref = token::create_token(
             creator,
-            on_chain_config.design_collection_name,
+            collection::name(on_chain_config.design_collection_object),
             *description,
             on_chain_config.design_mutability_config,
             *name,
@@ -375,50 +346,6 @@ module flex_token::coins {
         register_all(creator);
         token_objects_holder::add_to_holder(creator_addr, obj);
         obj
-    }
-
-    public entry fun transfer_coin(
-        owner: &signer,
-        coin_address: address,
-        receiver: address 
-    ) {
-        let coin_obj = object::address_to_object<Coin>(coin_address);
-        managed_transfer_coin(owner, coin_obj, receiver);
-    }
-
-    fun managed_transfer_coin(
-        owner: &signer,
-        coin_obj: Object<Coin>,
-        receiver: address
-    ) {
-        let owner_addr = signer::address_of(owner);
-        assert!(
-            exists<Coin>(object::object_address(&coin_obj)),
-            error::not_found(E_NO_SUCH_COINS)
-        );
-        assert!(
-            object::is_owner(coin_obj, owner_addr),
-            error::permission_denied(E_NOT_OWNER)
-        );
-        assert!(
-            token_objects_holder::holds(owner_addr, coin_obj),
-            error::permission_denied(E_NOT_OWNER)
-        );
-
-        object::transfer(owner, coin_obj, receiver);
-        token_objects_holder::remove_from_holder(owner, coin_obj);
-        token_objects_holder::add_to_holder(receiver, coin_obj);
-    }
-
-    // !!!
-    // when someone transfer coin with 3rd party,
-    // receiver's holder will simply lost it.
-    entry fun recover_coin(owner: &signer, coin_address: address) {
-        recover(owner, coin_address);
-    }
-
-    fun recover(owner: &signer, coin_address: address) {
-        token_objects_holder::recover<Coin>(owner, coin_address);
     }
 
     entry fun compose(
@@ -524,6 +451,70 @@ module flex_token::coins {
         object::transfer(owner, design_obj, owner_addr);
         object::disable_ungated_transfer(&design.transfer_config);
         token_objects_holder::add_to_holder(owner_addr, design_obj);
+    }
+
+    public entry fun register(account: &signer) {
+        register_all(account);
+    }
+
+    fun register_all(account: &signer) {
+        token_objects_holder::register<Coin>(account);
+        token_objects_holder::register<Design>(account);
+    }
+
+    public entry fun transfer(
+        owner: &signer,
+        coin_address: address,
+        receiver: address 
+    ) {
+        let coin_obj = object::address_to_object<Coin>(coin_address);
+        managed_transfer(owner, coin_obj, receiver);
+    }
+
+    fun managed_transfer(
+        owner: &signer,
+        coin_obj: Object<Coin>,
+        receiver: address
+    ) {
+        let owner_addr = signer::address_of(owner);
+        assert!(
+            exists<Coin>(object::object_address(&coin_obj)),
+            error::not_found(E_NO_SUCH_COINS)
+        );
+        assert!(
+            object::is_owner(coin_obj, owner_addr),
+            error::permission_denied(E_NOT_OWNER)
+        );
+        assert!(
+            token_objects_holder::holds(owner_addr, coin_obj),
+            error::permission_denied(E_NOT_OWNER)
+        );
+
+        object::transfer(owner, coin_obj, receiver);
+        token_objects_holder::remove_from_holder(owner, coin_obj);
+        token_objects_holder::add_to_holder(receiver, coin_obj);
+    }
+
+    // !!!
+    // this should be called after 3rd party transfer
+    public entry fun update(account: &signer) {
+        manual_update(account);
+    }
+
+    fun manual_update(account: &signer) {
+        token_objects_holder::update<Coin>(account);
+        token_objects_holder::update<Design>(account);
+    }
+
+    // !!!
+    // when someone transfer coin with 3rd party,
+    // receiver's holder will simply lost it.
+    entry fun recover(owner: &signer, coin_address: address) {
+        recover(owner, coin_address);
+    }
+
+    fun recover_coin(owner: &signer, coin_address: address) {
+        token_objects_holder::recover<Coin>(owner, coin_address);
     }
 
     #[test_only]
@@ -694,7 +685,7 @@ module flex_token::coins {
         assert!(token_objects_holder::holds(addr, coin_obj), 1);
         register(receiver);
         let receiver_addr = signer::address_of(receiver);
-        transfer_coin(account, coin_addr, receiver_addr);
+        transfer(account, coin_addr, receiver_addr);
         assert!(object::is_owner(coin_obj, receiver_addr), 2);
         assert!(token_objects_holder::holds(receiver_addr, coin_obj), 3);
     
@@ -714,12 +705,12 @@ module flex_token::coins {
         assert!(object::is_owner(design_obj, addr), 4);
         assert!(token_objects_holder::holds(addr, design_obj), 5);
 
-        transfer_coin(receiver, coin_addr, addr);
+        transfer(receiver, coin_addr, addr);
         compose(account, coin_addr, design_addr);
         assert!(object::is_owner(design_obj, coin_addr), 6);
         assert!(!token_objects_holder::holds(addr, design_obj), 7);
         
-        transfer_coin(account, coin_addr, receiver_addr);
+        transfer(account, coin_addr, receiver_addr);
         assert!(object::is_owner(design_obj, coin_addr), 8);
         assert!(!token_objects_holder::holds(receiver_addr, design_obj), 9);
         decompose(receiver, coin_addr, design_addr);
