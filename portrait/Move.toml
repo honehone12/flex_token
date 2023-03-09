@@ -2,11 +2,11 @@
 name = 'Portrait'
 version = '1.0.0'
 
+[dependencies]
+AptosFramework = { local = "../../../aptos-core/aptos-move/framework/aptos-framework" }
+TokenObjects = { local = "../../../aptos-core/aptos-move/move-examples/token_objects" }
+TokenObjectsHolder = { local = "../token_objects_holder" }
+
 [addresses]
 flex_token = "0xcafe"
 admin = "0xcafe"
-
-[dependencies]
-AptosFramework = { local = "../../../aptos-core/aptos-move/framework/aptos-framework" }
-TokenObjects = { local = "../framework" }
-TokenObjectsHolder = { local = "../token_objects_holder" }
