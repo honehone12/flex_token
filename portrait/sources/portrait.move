@@ -2,7 +2,7 @@
 // the idea is that looks like current distributed NFTs
 // but each parts can be replaced.
 
-module flex_token::portrait {
+module flex_token_portrait::portrait {
     use std::error;
     use std::signer;
     use std::vector;
@@ -40,7 +40,9 @@ module flex_token::portrait {
         face: Option<Object<Parts<Face>>>,
         hair: Option<Object<Parts<Hair>>>,
         eyes: Option<Object<Parts<Eyes>>>,
-        mouth: Option<Object<Parts<Mouth>>>
+        mouth: Option<Object<Parts<Mouth>>>,
+
+        transfer_config: TransferRef
     }
 
     #[resource_group_member(
@@ -66,7 +68,7 @@ module flex_token::portrait {
             option::none(),
             utf8(b"token-collection-url")
         );
-        let parts_constructor = collection::create_aggregable_collection(
+        let parts_constructor = collection::create_untracked_collection(
             caller,
             utf8(b"parts-collection-for-user-customizable-token"),
             collection::create_mutability_config(false, false),
@@ -313,13 +315,17 @@ module flex_token::portrait {
             *uri
         );
         let token_signer = object::generate_signer(&constructor);
+        let transfer_config = object::generate_transfer_ref(&constructor);
+        object::disable_ungated_transfer(&transfer_config);
+
         move_to(
             &token_signer,
             PortraitBase{
                 face: option::none(),
                 hair: option::none(),
                 eyes: option::none(),
-                mouth: option::none()
+                mouth: option::none(),
+                transfer_config
             }
         );
         let obj = object::address_to_object(signer::address_of(&token_signer));
@@ -515,8 +521,10 @@ module flex_token::portrait {
         let base = borrow_global_mut<PortraitBase>(object::object_address(base_obj));
         option::fill(&mut base.face, *parts_obj);
         let parts = borrow_global<Parts<Face>>(object::object_address(parts_obj));
+        object::enable_ungated_transfer(&base.transfer_config);
         object::enable_ungated_transfer(&parts.transfer_config);
         object::transfer_to_object(owner, *parts_obj, *base_obj);
+        object::disable_ungated_transfer(&base.transfer_config);
         token_objects_holder::remove_from_holder(owner, *parts_obj);
     }
 
@@ -664,10 +672,12 @@ module flex_token::portrait {
         let base = borrow_global_mut<PortraitBase>(base_obj_addr);
         let stored_parts = option::extract(&mut base.face);
         verify_stored_parts(owner_addr, &stored_parts, parts_obj, base_obj_addr);
+        object::enable_ungated_transfer(&base.transfer_config);
         object::transfer(owner, stored_parts, owner_addr);
-        token_objects_holder::add_to_holder(owner_addr, stored_parts);
         let parts = borrow_global<Parts<Face>>(object::object_address(parts_obj));
         object::disable_ungated_transfer(&parts.transfer_config);
+        object::disable_ungated_transfer(&base.transfer_config);
+        token_objects_holder::add_to_holder(owner_addr, stored_parts);
     }
 
     entry fun remove_hair(
@@ -695,10 +705,12 @@ module flex_token::portrait {
         let base = borrow_global_mut<PortraitBase>(base_obj_addr);
         let stored_parts = option::extract(&mut base.hair);
         verify_stored_parts(owner_addr, &stored_parts, parts_obj, base_obj_addr);
+        object::enable_ungated_transfer(&base.transfer_config);
         object::transfer(owner, stored_parts, owner_addr);
-        token_objects_holder::add_to_holder(owner_addr, stored_parts);
         let parts = borrow_global<Parts<Hair>>(object::object_address(parts_obj));
         object::disable_ungated_transfer(&parts.transfer_config);
+        object::disable_ungated_transfer(&base.transfer_config);
+        token_objects_holder::add_to_holder(owner_addr, stored_parts);
     }
 
     entry fun remove_eyes(
@@ -726,10 +738,12 @@ module flex_token::portrait {
         let base = borrow_global_mut<PortraitBase>(base_obj_addr);
         let stored_parts = option::extract(&mut base.eyes);
         verify_stored_parts(owner_addr, &stored_parts, parts_obj, base_obj_addr);
+        object::enable_ungated_transfer(&base.transfer_config);
         object::transfer(owner, stored_parts, owner_addr);
-        token_objects_holder::add_to_holder(owner_addr, stored_parts);
         let parts = borrow_global<Parts<Eyes>>(object::object_address(parts_obj));
         object::disable_ungated_transfer(&parts.transfer_config);
+        object::disable_ungated_transfer(&base.transfer_config);
+        token_objects_holder::add_to_holder(owner_addr, stored_parts);
     }
 
     entry fun remove_mouth(
@@ -757,10 +771,12 @@ module flex_token::portrait {
         let base = borrow_global_mut<PortraitBase>(base_obj_addr);
         let stored_parts = option::extract(&mut base.mouth);
         verify_stored_parts(owner_addr, &stored_parts, parts_obj, base_obj_addr);
+        object::enable_ungated_transfer(&base.transfer_config);
         object::transfer(owner, stored_parts, owner_addr);
-        token_objects_holder::add_to_holder(owner_addr, stored_parts);
         let parts = borrow_global<Parts<Mouth>>(object::object_address(parts_obj));
         object::disable_ungated_transfer(&parts.transfer_config);
+        object::disable_ungated_transfer(&base.transfer_config);
+        token_objects_holder::add_to_holder(owner_addr, stored_parts);
     }
 
     public entry fun register(account: &signer) {
@@ -779,7 +795,8 @@ module flex_token::portrait {
         owner: &signer,
         portrait_address: address,
         receiver: address
-    ) {
+    )
+    acquires PortraitBase {
         managed_transfer(
             owner, 
             &object::address_to_object(portrait_address),
@@ -791,10 +808,15 @@ module flex_token::portrait {
         owner: &signer, 
         portrait: &Object<PortraitBase>,
         to: address
-    ) {
+    )
+    acquires PortraitBase {
         let owner_addr = signer::address_of(owner);
         verify_base(owner_addr, portrait);
+
+        let base = borrow_global<PortraitBase>(object::object_address(portrait));
+        object::enable_ungated_transfer(&base.transfer_config);
         object::transfer(owner, *portrait, to);
+        object::disable_ungated_transfer(&base.transfer_config);
         token_objects_holder::remove_from_holder(owner, *portrait);
         token_objects_holder::add_to_holder(to, *portrait);
     }
@@ -1059,6 +1081,20 @@ module flex_token::portrait {
         assert!(object::is_owner(base, to), 0);
         assert!(token_objects_holder::holds(to, base), 1);
         assert!(!token_objects_holder::holds(@admin, base), 2);   
+    }
+
+    #[test(account = @admin, other = @0xbeef)]
+    #[expected_failure(abort_code = 327683, location = aptos_framework::object)]
+    fun test_ungated_transfer_fail_base(account: &signer, other: address)
+    acquires PortraitOnChainConfig {
+        init_module(account);
+        let base = create_portrait_base(
+            account,
+            &utf8(b"user-customizable-token-00"),
+            &utf8(b"portrait-00"),
+            &utf8(b"portrait-00-url")
+        );
+        object::transfer(account, base, other);
     }
 
     #[test(account = @admin, other = @0xbeef)]

@@ -8,5 +8,5 @@ TokenObjects = { local = "../../../aptos-core/aptos-move/move-examples/token_obj
 TokenObjectsHolder = { local = "../token_objects_holder" }
 
 [addresses]
-flex_token = "0xcafe"
+flex_token_portrait = "0xcafe"
 admin = "0xcafe"
