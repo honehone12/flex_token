@@ -60,6 +60,14 @@ module flex_token_coins::coins {
         transfer_config: TransferRef
     }
 
+    entry fun enable_trading(owner: &signer, coin_address: address) {
+
+    }
+
+    entry fun disable_trading(owner: &signer, coin_address: address) {
+        
+    } 
+
     fun init_module(resource_signer: &signer) {
         let signer_capability = resource_account::retrieve_resource_account_cap(
             resource_signer,
