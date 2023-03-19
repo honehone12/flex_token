@@ -58,14 +58,6 @@ module flex_token_coins::coins {
     struct Design has key {
         attribute: String,
         transfer_config: TransferRef
-    }
-
-    entry fun enable_trading(owner: &signer, coin_address: address) {
-
-    }
-
-    entry fun disable_trading(owner: &signer, coin_address: address) {
-        
     } 
 
     fun init_module(resource_signer: &signer) {
@@ -556,6 +548,50 @@ module flex_token_coins::coins {
 
     fun recover_coin(owner: &signer, coin_address: address) {
         token_objects_holder::recover<Coin>(owner, coin_address);
+    }
+
+    // !!!
+    // 3rd party transfer configs
+    public entry fun enable_trading(owner: &signer, coin_address: address)
+    acquires Coin {
+        enable_ungated_transfer(owner, coin_address);
+    }
+
+    public entry fun disable_trading(owner: &signer, coin_address: address)
+    acquires Coin {
+        disable_ungated_transfer(owner, coin_address)
+    }
+
+    fun enable_ungated_transfer(owner: &signer, coin_addr: address)
+    acquires Coin {
+        let owner_addr = signer::address_of(owner);
+        let coin_obj = object::address_to_object<Coin>(coin_addr);
+        assert!(
+            object::is_owner(coin_obj, owner_addr),
+            error::permission_denied(E_NOT_OWNER)
+        );
+        assert!(
+            token_objects_holder::holds(owner_addr, coin_obj),
+            error::permission_denied(E_NOT_OWNER)
+        );
+        let coin = borrow_global<Coin>(coin_addr);
+        object::enable_ungated_transfer(&coin.transfer_config);
+    }
+
+    fun disable_ungated_transfer(owner: &signer, coin_addr: address)
+    acquires Coin {
+        let owner_addr = signer::address_of(owner);
+        let coin_obj = object::address_to_object<Coin>(coin_addr);
+        assert!(
+            object::is_owner(coin_obj, owner_addr),
+            error::permission_denied(E_NOT_OWNER)
+        );
+        assert!(
+            token_objects_holder::holds(owner_addr, coin_obj),
+            error::permission_denied(E_NOT_OWNER)
+        );
+        let coin = borrow_global<Coin>(coin_addr);
+        object::disable_ungated_transfer(&coin.transfer_config);
     }
 
     #[test_only]
