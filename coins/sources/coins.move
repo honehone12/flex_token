@@ -6,6 +6,8 @@
 // royality info
 // mutator
 
+// test for transfer configs
+
 module flex_token_coins::coins {
     use std::signer;
     use std::error;
